@@ -1,0 +1,15 @@
+build/
+out/
+.vs/
+.vscode/
+
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+compile_commands.json
+
+*.exe
+*.obj
+*.pdb
+
+imgui.ini
