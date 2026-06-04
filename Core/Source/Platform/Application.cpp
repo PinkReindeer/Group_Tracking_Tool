@@ -1,6 +1,10 @@
 #include <glad/gl.h>
 #include <GLFW/glfw3.h>
 
+#include "IconsFontAwesome6.h"
+
+#include <iostream>
+
 #include "Application.h"
 
 #include "Layer.h"

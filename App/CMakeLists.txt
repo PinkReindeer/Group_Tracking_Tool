@@ -19,9 +19,6 @@ target_link_libraries(App PRIVATE Core)
 
 target_include_directories(App PRIVATE Source)
 
-# Reuse Core's precompiled header
-target_precompile_headers(App REUSE_FROM Core)
-
 add_custom_command(TARGET App POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_CURRENT_SOURCE_DIR}/Assets"

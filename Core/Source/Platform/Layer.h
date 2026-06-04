@@ -1,5 +1,7 @@
 #pragma once
 
+#include <memory>
+
 namespace TrackingTool
 {
 	class Layer

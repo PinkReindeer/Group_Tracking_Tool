@@ -1,6 +1,8 @@
 #include <glad/gl.h>
 #include <GLFW/glfw3.h>
 
+#include <iostream>
+
 #include "stb_image.h"
 
 #include "Window.h"

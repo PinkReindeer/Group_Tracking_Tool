@@ -3,12 +3,12 @@
 #
 
 set(SOURCES
-    Source/Application.cpp
-    Source/Application.h
-    Source/Layer.cpp
-    Source/Layer.h
-    Source/Window.cpp
-    Source/Window.h
+    "Source/Platform/Application.cpp"
+    "Source/Platform/Application.h"
+    "Source/Platform/Layer.cpp"
+    "Source/Platform/Layer.h"
+    "Source/Platform/Window.cpp"
+    "Source/Platform/Window.h"
     Vendor/stb/stb_image.h
     Vendor/stb/stb_image.cpp
 )
@@ -38,8 +38,5 @@ target_include_directories(Core PUBLIC
     Source
     Vendor/stb
 )
-
-# Precompiled header
-target_precompile_headers(Core PUBLIC "${CMAKE_SOURCE_DIR}/gpch.h")
 
 set_target_properties(Core PROPERTIES FOLDER "Projects")
