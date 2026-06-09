@@ -1,11 +1,13 @@
 #include <glad/gl.h>
 #include <GLFW/glfw3.h>
 
-#include <iostream>
+#include <stdexcept>
 
 #include "stb_image.h"
 
 #include "Window.h"
+
+#include "Utils/Log.h"
 
 namespace TrackingTool
 {
@@ -35,8 +37,8 @@ namespace TrackingTool
 
 		if (!m_Handle)
 		{
-			std::cerr << "Failed to create GLFW window!\n";
-			assert(false);
+			Log::Fatal("Failed to create GLFW window ({}x{}, title '{}').", m_Specification.Width, m_Specification.Height, m_Specification.Title);
+			throw std::runtime_error("Failed to create GLFW window");
 		}
 
 		// Load image and set in on the window
@@ -52,7 +54,7 @@ namespace TrackingTool
 		}
 		else
 		{
-			std::cerr << "Failed to load window icon from '" << m_Specification.IconPath.c_str() << "': " << stbi_failure_reason() << std::endl;
+			Log::Warn("Failed to load window icon from '{}': {}", m_Specification.IconPath, stbi_failure_reason());
 		}
 
 		glfwMakeContextCurrent(m_Handle);

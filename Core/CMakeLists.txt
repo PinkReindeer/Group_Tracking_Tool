@@ -3,12 +3,15 @@
 #
 
 set(SOURCES
-    "Source/Platform/Application.cpp"
-    "Source/Platform/Application.h"
-    "Source/Platform/Layer.cpp"
-    "Source/Platform/Layer.h"
-    "Source/Platform/Window.cpp"
-    "Source/Platform/Window.h"
+    Source/Platform/Application.cpp
+    Source/Platform/Application.h
+    Source/Platform/Layer.cpp
+    Source/Platform/Layer.h
+    Source/Platform/Window.cpp
+    Source/Platform/Window.h
+    Source/Utils/Log.cpp
+    Source/Utils/Log.h
+    Source/Utils/Assert.h
     Vendor/stb/stb_image.h
     Vendor/stb/stb_image.cpp
 )
@@ -18,7 +21,7 @@ add_library(Core STATIC)
 target_sources(Core PRIVATE ${SOURCES})
 
 # Match VS filters to directory structure on disk
-source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES ${SOURCES})
+source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${SOURCES})
 
 target_compile_definitions(Core PUBLIC GLFW_INCLUDE_NONE)
 

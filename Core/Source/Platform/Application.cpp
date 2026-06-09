@@ -3,11 +3,12 @@
 
 #include "IconsFontAwesome6.h"
 
-#include <iostream>
-
 #include "Application.h"
 
 #include "Layer.h"
+
+#include "Utils/Assert.h"
+#include "Utils/Log.h"
 
 static constexpr const char* UIPath = "Assets/Fonts/Inder-Regular.ttf";
 static constexpr const char* FaPath = "Assets/Fonts/fa-solid-900.ttf";
@@ -19,19 +20,23 @@ namespace TrackingTool
 
     static void GLFWErrorCallback(int error, const char* description)
     {
-        std::cerr << "[GLFW Error]: " << description << std::endl;
+        Log::Error("[GLFW] ({}) {}", error, description);
     }
 
     Application::Application(const ApplicationSpecification& spec)
         : m_Specification(spec)
     {
-        assert(!s_Application && "Only one Application instance is allowed!");
+        TT_ASSERT(!s_Application, "Only one Application instance is allowed!");
 
         s_Application = this;
 
 
         glfwSetErrorCallback(GLFWErrorCallback);
-        glfwInit();
+        if (!glfwInit())
+        {
+            Log::Fatal("Failed to initialize GLFW.");
+            throw std::runtime_error("Failed to initialize GLFW");
+        }
 
         // Set window title to app name if empty
         if (m_Specification.WindowSpec.Title.empty())
@@ -49,7 +54,7 @@ namespace TrackingTool
         m_UIFont = io.Fonts->AddFontFromFileTTF(UIPath, 18.0f);
         if (!m_UIFont)
         {
-            std::cerr << "Warning: failed to load UI font from '" << UIPath << "'. Falling back to default font.\n";
+            Log::Warn("Failed to load UI font from '{}'. Falling back to default font.", UIPath);
             m_UIFont = io.Fonts->AddFontDefault();
         }
 
@@ -63,7 +68,7 @@ namespace TrackingTool
         m_FaFont = io.Fonts->AddFontFromFileTTF(FaPath, 18.0f, &iconsConfig, icons_ranges);
         if (!m_FaFont)
         {
-            std::cerr << "Warning: failed to load FontAwesome from '" << FaPath << "'. Icons will not appear.\n";
+            Log::Warn("Failed to load FontAwesome from '{}'. Icons will not appear.", FaPath);
         }
 
         io.Fonts->AddFontFromFileTTF(UIPath, 24.0f);
@@ -103,7 +108,7 @@ namespace TrackingTool
 
     Application& Application::Get()
     {
-        assert(s_Application);
+        TT_ASSERT(s_Application, "Application::Get() called before an Application was constructed.");
         return *s_Application;
     }
 

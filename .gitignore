@@ -2,6 +2,7 @@ build/
 out/
 .vs/
 .vscode/
+.kiro/
 
 CMakeCache.txt
 CMakeFiles/
