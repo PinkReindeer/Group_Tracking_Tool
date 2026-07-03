@@ -12,6 +12,8 @@ set(SOURCES
     Source/Utils/Log.cpp
     Source/Utils/Log.h
     Source/Utils/Assert.h
+    Source/Database/Database.h
+    Source/Database/Database.cpp
     Vendor/stb/stb_image.h
     Vendor/stb/stb_image.cpp
 )

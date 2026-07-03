@@ -4,6 +4,8 @@ out/
 .vscode/
 .kiro/
 
+.env
+
 CMakeCache.txt
 CMakeFiles/
 cmake_install.cmake

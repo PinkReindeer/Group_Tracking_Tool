@@ -6,7 +6,6 @@ int main()
 {
 	TrackingTool::ApplicationSpecification appSpec;
 	appSpec.Name = "Tracking Tool";
-	appSpec.WindowSpec.IconPath = "Assets/UTH.png";
 	appSpec.WindowSpec.Height = 720;
 	appSpec.WindowSpec.Width = 1280;
 

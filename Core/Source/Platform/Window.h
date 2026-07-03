@@ -10,7 +10,7 @@ namespace TrackingTool
 	struct WindowSpecification
 	{
 		std::string Title;
-		std::string IconPath;
+		std::string IconPath = "Assets/icon.png";
 		uint32_t Width = 1440;
 		uint32_t Height = 1024;
 		bool IsResizeable = true;
