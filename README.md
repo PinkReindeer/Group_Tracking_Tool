@@ -65,16 +65,10 @@ brew install postgresql@18
 ### Option 1 — Visual Studio (Recommended on Windows)
 
 1. Open the project folder in Visual Studio 2022 (File → Open → CMake…).
-2. Visual Studio will detect `CMakeSettings.json` automatically.
-3. If your PostgreSQL installation path differs from the default, edit `CMakeSettings.json`:
+2. Visual Studio will detect `CMakePresets.json` automatically.
+3. If your PostgreSQL installation path differs from the default, edit `CMakePresets.json`:
    ```jsonc
-   "variables": [
-     {
-       "name": "PostgreSQL_ROOT",
-       "value": "C:/Program Files/PostgreSQL/18",   // ← adjust this
-       "type": "PATH"
-     }
-   ]
+        "PostgreSQL_ROOT": "C:/Program Files/PostgreSQL/18" // adjust this
    ```
 4. Select the **x64-Debug** configuration and build (`Ctrl+Shift+B`).
 5. Set **App** as the startup project, then run (`F5`).
