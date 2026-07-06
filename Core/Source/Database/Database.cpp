@@ -106,8 +106,7 @@ namespace TrackingTool
         {
             pqxx::work txn(*s_Connection);
 
-            pqxx::result res = txn.exec_params("INSERT INTO users (username, password) " "VALUES ($1, $2)", userName, hashedPassword);
-
+            txn.exec_params("INSERT INTO users (username, password) VALUES ($1, $2)", userName, hashedPassword);
             txn.commit();
 
             Log::Info("DB_InsertUser: user '{}' registered", userName);
