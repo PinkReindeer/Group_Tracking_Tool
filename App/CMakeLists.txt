@@ -6,6 +6,10 @@ set(SOURCES
 	Source/Main.cpp
 	Source/VoidLayer.cpp
 	Source/VoidLayer.h
+	Source/RegisterLayer.h
+	Source/RegisterLayer.cpp
+	Source/NotificationLayer.h
+	Source/NotificationLayer.cpp
 )
 
 add_executable(App)
