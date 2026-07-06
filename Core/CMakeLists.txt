@@ -14,6 +14,8 @@ set(SOURCES
     Source/Utils/Assert.h
     Source/Database/Database.h
     Source/Database/Database.cpp
+    Source/Service/AuthService.h
+    Source/Service/AuthService.cpp
     Vendor/stb/stb_image.h
     Vendor/stb/stb_image.cpp
 )
