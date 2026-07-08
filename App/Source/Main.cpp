@@ -1,13 +1,9 @@
 #include "Platform/Application.h"
 #include "Database/Database.h"
-#include "Utils/Log.h"
-#include "Service/AuthService.h"
-#include <bcrypt/BCrypt.hpp>
 
 #include "LoginLayer.h"
 #include "RegisterLayer.h"
 #include "NotificationLayer.h"
-#include "DashboardLayer.h"
 
 int main()
 {

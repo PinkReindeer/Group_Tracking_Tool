@@ -210,16 +210,13 @@ void LoginLayer::OnRender()
 			
 			if (doLogin)
 			{
-				std::string msg;
-				if (TrackingTool::AuthService::Login(m_UserName, m_Password, msg))
+				if (TrackingTool::AuthService::Login(m_UserName, m_Password, m_NotificationMessage))
 				{
-					// Login successful! 
-					strncpy(m_NotifationMessage, msg.c_str(), sizeof(m_NotifationMessage) - 1);
 					TransitionTo<DashboardLayer>();
 				}
 				else
 				{
-					strncpy(m_NotifationMessage, msg.c_str(), sizeof(m_NotifationMessage) - 1);
+					// Show error notification
 				}
 			}
 
@@ -232,25 +229,6 @@ void LoginLayer::OnRender()
 			ImGui::PopStyleColor(4);
 
 			ImGui::Dummy(ImVec2(0.0f, 8.0f));
-
-			// Notification Message
-			if (strlen(m_NotifationMessage) > 0)
-			{
-				ImVec2 msgSize = ImGui::CalcTextSize(m_NotifationMessage);
-				ImGui::SetCursorPosX((childSize.x - msgSize.x) * 0.5f);
-				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.4f, 0.4f, 1.0f)); // Red/Pinkish for errors usually, or could check success
-				bool isSuccess = strstr(m_NotifationMessage, "successful") != nullptr;
-				if (isSuccess)
-					ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.4f, 1.0f, 0.4f, 1.0f)); // Green if success
-
-				ImGui::Text("%s", m_NotifationMessage);
-				
-				if (isSuccess)
-					ImGui::PopStyleColor(); // Pop green
-				ImGui::PopStyleColor(); // Pop red
-				
-				ImGui::Dummy(ImVec2(0.0f, 8.0f));
-			}
 
 			// Sign up text
 			const char* text1 = "Don't have an account? ";

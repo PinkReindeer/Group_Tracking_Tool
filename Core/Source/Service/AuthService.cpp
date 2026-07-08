@@ -7,6 +7,8 @@ namespace TrackingTool
 
 	bool AuthService::Register(const std::string& userName, const std::string& password, std::string& outMessage)
 	{
+		outMessage.clear();
+
 		if (userName.empty() || password.empty())
 		{
 			outMessage = "Username or password cannot be empty.";
@@ -35,6 +37,8 @@ namespace TrackingTool
 
 	bool AuthService::Login(const std::string& userName, const std::string& password, std::string& outMessage)
 	{
+		outMessage.clear();
+
 		if (userName.empty() || password.empty())
 		{
 			outMessage = "Username or password cannot be empty.";
@@ -57,7 +61,7 @@ namespace TrackingTool
 			}
 			else
 			{
-				outMessage = "Incorrect password.";
+				outMessage = "Incorrect username or password.";
 				return false;
 			}
 		}
