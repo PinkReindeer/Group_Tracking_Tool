@@ -162,14 +162,4 @@ namespace TrackingTool
     {
         return (float)glfwGetTime();
     }
-
-    void Application::PushNotification(const std::string& message, NotificationType type)
-    {
-        auto notification = GetLayer<NotificationLayer>();
-        if (notification)
-        {
-            notification->ShowNotification(message, type);
-        }
-    }
-
 }

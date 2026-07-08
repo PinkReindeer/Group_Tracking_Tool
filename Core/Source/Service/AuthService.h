@@ -11,7 +11,6 @@ namespace TrackingTool
 	{
 	public:
 		static bool Register(const std::string& userName, const std::string& password, std::string& outMessage);
-		static bool Login(const std::string& userName, const std::string& password, std::string& outMessage);
 	};
 
 }

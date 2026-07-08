@@ -8,7 +8,6 @@
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
 
-#include "App/Source/NotificationLayer.h"
 #include "Window.h"
 #include "Layer.h"
 
@@ -54,8 +53,6 @@ namespace TrackingTool
 
         static Application& Get();
         static float GetTime();
-
-        void PushNotification(const std::string& message, NotificationType type);
 
 		ImFont* GetUIFont() const { return m_UIFont; }
 		ImFont* GetFaFont() const { return m_FaFont; }

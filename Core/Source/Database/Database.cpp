@@ -142,29 +142,4 @@ namespace TrackingTool
         }
     }
 
-    std::string Database::GetUserPasswordHash(const std::string& userName)
-    {
-        if (!s_Connection || !s_Connection->is_open())
-        {
-            Log::Error("DB_GetUserPasswordHash: Database is not connected!");
-            return "";
-        }
-
-        try
-        {
-            pqxx::work txn(*s_Connection);
-            pqxx::result res = txn.exec_params("SELECT password FROM users WHERE username = $1", userName);
-            
-            if (res.empty())
-                return "";
-                
-            return res[0][0].as<std::string>();
-        }
-        catch (const std::exception& e)
-        {
-            Log::Error("DB_GetUserPasswordHash: {}", e.what());
-            return "";
-        }
-    }
-
 } // namespace TrackingTool
