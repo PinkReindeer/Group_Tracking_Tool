@@ -16,8 +16,8 @@ int main()
 	appSpec.WindowSpec.Width = 1280;
 
 	TrackingTool::Application app(appSpec);
-	//app.PushLayer<LoginLayer>();
-	app.PushLayer<RegisterLayer>();
+	app.PushLayer<LoginLayer>();
+	//app.PushLayer<RegisterLayer>();
 	app.PushLayer<NotificationLayer>();
 	app.Run();
 }

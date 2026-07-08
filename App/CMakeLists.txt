@@ -1,4 +1,4 @@
-#
+﻿#
 # App
 #
 
@@ -12,7 +12,7 @@ set(SOURCES
 	Source/RegisterLayer.cpp
 	Source/NotificationLayer.h
 	Source/NotificationLayer.cpp
- "Source/LoginLayer.cpp" "Source/LoginLayer.h")
+ )
 
 add_executable(App)
 
