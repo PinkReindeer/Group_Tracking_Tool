@@ -1,0 +1,20 @@
+#pragma once
+
+#include <glad/gl.h>
+#include "Platform/Layer.h"
+
+class LoginLayer : public TrackingTool::Layer
+{
+public:
+	LoginLayer();
+	virtual ~LoginLayer();
+
+	virtual void OnUpdate(float ts) override;
+	virtual void OnRender() override;
+
+private:
+	char m_UserName[256] = "";
+	char m_Password[256] = "";
+	char m_NotifationMessage[256] = "";
+	bool m_ShowPassword = false;
+};
