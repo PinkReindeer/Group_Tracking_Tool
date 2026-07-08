@@ -5,7 +5,9 @@
 
 #include "IconsFontAwesome6.h"
 #include "Platform/Application.h"
+#include "Service/AuthService.h"
 #include "RegisterLayer.h"
+#include "DashboardLayer.h"
 #include "LoginLayer.h"
 
 #include <cstring>
@@ -193,10 +195,31 @@ void LoginLayer::OnRender()
 			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(30.0f / 255.0f, 30.0f / 255.0f, 36.0f / 255.0f, 1.0f));
 			ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 2.0f);
 
+			bool doLogin = false;
+
 			if (ImGui::Button(ICON_FA_RIGHT_TO_BRACKET "  Login", ImVec2(inputWidth, 40.0f)))
 			{
-				// TODO: Implement login logic
+				doLogin = true;
 			}
+			
+			// Handle Enter key for login
+			if (ImGui::IsKeyPressed(ImGuiKey_Enter) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter))
+			{
+				doLogin = true;
+			}
+			
+			if (doLogin)
+			{
+				if (TrackingTool::AuthService::Login(m_UserName, m_Password, m_NotificationMessage))
+				{
+					TransitionTo<DashboardLayer>();
+				}
+				else
+				{
+					// Show error notification
+				}
+			}
+
 			if (ImGui::IsItemHovered())
 			{
 				ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
@@ -220,16 +243,18 @@ void LoginLayer::OnRender()
 			
 			ImGui::SameLine(0, 0);
 
-			ImGui::PushStyleColor(ImGuiCol_Text, footerText);
+			ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0, 0, 0, 0));
+			ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0, 0, 0, 0));
+			ImGui::PushStyleColor(ImGuiCol_Text, cyanColor);
 			if (ImGui::Selectable(text2, false, 0, ImGui::CalcTextSize(text2)))
 			{
-				TrackingTool::Application::Get().PushLayer<RegisterLayer>();
+				TransitionTo<RegisterLayer>();
 			}
 			if (ImGui::IsItemHovered())
 			{
 				ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
 			}
-			ImGui::PopStyleColor();
+			ImGui::PopStyleColor(3);
 		}
 		ImGui::EndChild();
 		

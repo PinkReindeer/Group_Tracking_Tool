@@ -13,6 +13,7 @@ namespace TrackingTool
 
         static bool InsertUser(const std::string& userName, const std::string& hashedPassword);
         static bool UserExists(const std::string& userName);
+        static std::string GetUserPasswordHash(const std::string& userName);
     };
 
 }

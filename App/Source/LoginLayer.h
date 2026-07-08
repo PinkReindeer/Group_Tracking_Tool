@@ -15,6 +15,8 @@ public:
 private:
 	char m_UserName[256] = "";
 	char m_Password[256] = "";
-	char m_NotifationMessage[256] = "";
+	
+	std::string m_NotificationMessage;
+
 	bool m_ShowPassword = false;
 };
