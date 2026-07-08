@@ -213,10 +213,11 @@ void LoginLayer::OnRender()
 				if (TrackingTool::AuthService::Login(m_UserName, m_Password, m_NotificationMessage))
 				{
 					TransitionTo<DashboardLayer>();
+					TrackingTool::Application::Get().PushNotification(m_NotificationMessage, NotificationType::Info);
 				}
 				else
 				{
-					// Show error notification
+					TrackingTool::Application::Get().PushNotification(m_NotificationMessage, NotificationType::Error);
 				}
 			}
 
