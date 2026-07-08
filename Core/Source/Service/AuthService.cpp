@@ -33,4 +33,39 @@ namespace TrackingTool
 		}
 	}
 
+	bool AuthService::Login(const std::string& userName, const std::string& password, std::string& outMessage)
+	{
+		if (userName.empty() || password.empty())
+		{
+			outMessage = "Username or password cannot be empty.";
+			return false;
+		}
+
+		std::string hashedPassword = Database::GetUserPasswordHash(userName);
+		if (hashedPassword.empty())
+		{
+			outMessage = "User not found or database error.";
+			return false;
+		}
+
+		try
+		{
+			if (BCrypt::validatePassword(password, hashedPassword))
+			{
+				outMessage = "Login successful.";
+				return true;
+			}
+			else
+			{
+				outMessage = "Incorrect password.";
+				return false;
+			}
+		}
+		catch (const std::exception& e)
+		{
+			outMessage = "Invalid password format in database.";
+			return false;
+		}
+	}
+
 }

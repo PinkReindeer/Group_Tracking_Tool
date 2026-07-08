@@ -1,4 +1,4 @@
-﻿#
+#
 # App
 #
 
@@ -12,7 +12,9 @@ set(SOURCES
 	Source/RegisterLayer.cpp
 	Source/NotificationLayer.h
 	Source/NotificationLayer.cpp
- )
+	Source/DashboardLayer.h
+	Source/DashboardLayer.cpp
+)
 
 add_executable(App)
 
