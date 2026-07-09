@@ -1,8 +1,6 @@
 #pragma once
 
 #include <memory>
-#include <concepts>
-#include <utility>
 
 namespace TrackingTool
 {

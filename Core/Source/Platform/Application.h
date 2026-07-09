@@ -29,8 +29,6 @@ namespace TrackingTool
         void Run();
         void Stop();
 
-        void PopLayer();
-
         template<typename TLayer>
         requires(std::is_base_of_v<Layer, TLayer>)
         void PushLayer()
