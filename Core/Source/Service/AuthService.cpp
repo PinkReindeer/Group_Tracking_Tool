@@ -1,17 +1,28 @@
 #include "AuthService.h"
 
 #include <bcrypt/BCrypt.hpp>
+#include <cstring>
 
 namespace TrackingTool
 {
 
-	bool AuthService::Register(const std::string& userName, const std::string& password, std::string& outMessage)
+	bool AuthService::Register(const std::string& userName, const std::string& password, const std::string& confirmPassword, std::string& outMessage)
 	{
 		outMessage.clear();
 
 		if (userName.empty() || password.empty())
 		{
 			outMessage = "Username or password cannot be empty.";
+			return false;
+		}
+		else if(password.size() < 8)
+		{
+			outMessage = "Passwords must be longer than 8 characters!";
+			return false;
+		}
+		else if(password != confirmPassword)
+		{
+			outMessage = "Passwords do not match.";
 			return false;
 		}
 
