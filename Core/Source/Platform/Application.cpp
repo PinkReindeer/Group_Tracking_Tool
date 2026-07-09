@@ -101,6 +101,13 @@ namespace TrackingTool
         m_Running = false;
     }
 
+    void Application::PopLayer()
+    {
+        if (m_LayerStack.size() > 1)
+        {
+            m_LayerStack.pop_back();
+        }
+    }
     glm::vec2 Application::GetFramebufferSize() const
     {
         return m_Window->GetFramebufferSize();

@@ -1,7 +1,6 @@
 #include "AuthService.h"
 
 #include <bcrypt/BCrypt.hpp>
-#include <cstring>
 
 namespace TrackingTool
 {
@@ -13,15 +12,9 @@ namespace TrackingTool
 			outMessage = "Username or password cannot be empty.";
 			return false;
 		}
-		else if(password.size() < 8)
-		{
-			outMessage = "Passwords must be longer than 8 characters!";
-			return false;
-		}
-		else if(password != confpassword)
+		else if(strcmp(password, m_ConfirmPassword) != 0)
 		{
 			outMessage = "Passwords do not match.";
-			return false;
 		}
 
 		if (Database::UserExists(userName))

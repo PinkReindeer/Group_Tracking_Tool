@@ -10,7 +10,7 @@ namespace TrackingTool
 	class AuthService
 	{
 	public:
-		static bool Register(const std::string& userName, const std::string& password, std::string& outMessage);
+		static bool Register(const std::string& userName, const std::string& password, const std::string& confpassword, std::string& outMessage);
 	};
 
 }

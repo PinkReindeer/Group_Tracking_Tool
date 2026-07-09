@@ -17,7 +17,6 @@ private:
 	char m_Password[128] = {};
 	char m_ConfirmPassword[128] = {};
 	bool m_ShowPassword = false;
-	bool m_ShowConfirmPassword = false;
 	
 	std::string m_NotifationMessage;
 };
