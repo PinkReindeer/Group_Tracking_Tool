@@ -78,7 +78,7 @@ namespace TrackingTool
 		}
 		catch (const std::exception& e)
 		{
-			outMessage = "Invalid password format in database.";
+			outMessage = std::string("Invalid password format in database.") + e.what();
 			return false;
 		}
 	}

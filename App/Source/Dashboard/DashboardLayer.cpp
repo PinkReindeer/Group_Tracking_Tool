@@ -2,14 +2,6 @@
 
 #include "imgui.h"
 
-DashboardLayer::DashboardLayer()
-{
-}
-
-DashboardLayer::~DashboardLayer()
-{
-}
-
 void DashboardLayer::OnUpdate(float ts)
 {
 }

@@ -6,8 +6,8 @@
 class LoginLayer : public TrackingTool::Layer
 {
 public:
-	LoginLayer();
-	virtual ~LoginLayer();
+	LoginLayer() = default;
+	virtual ~LoginLayer() = default;
 
 	virtual void OnUpdate(float ts) override;
 	virtual void OnRender() override;

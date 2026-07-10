@@ -6,8 +6,8 @@
 class DashboardLayer : public TrackingTool::Layer
 {
 public:
-	DashboardLayer();
-	virtual ~DashboardLayer();
+	DashboardLayer() = default;
+	virtual ~DashboardLayer() = default;
 
 	virtual void OnUpdate(float ts) override;
 	virtual void OnRender() override;
