@@ -13,8 +13,12 @@ public:
 	virtual void OnRender() override;
 
 private:
-	char m_UserName[128] = {};
-	char m_Password[128] = {};
+	char m_UserName[256] = {};
+	char m_Password[256] = {};
+	char m_ConfirmPassword[256] = {};
 
-	std::string m_NotifationMessage;
+	bool m_ShowPassword = false;
+	bool m_ShowConfirmPassword = false;
+	
+	std::string m_NotificationMessage;
 };
