@@ -1,8 +1,8 @@
 #pragma once
 
 #include "Platform/Layer.h"
-#include "LoginView.h"
-#include "RegisterView.h"
+#include "Views/LoginView.h"
+#include "Views/RegisterView.h"
 
 enum class AuthState { Login, Register };
 
