@@ -4,10 +4,12 @@
 
 set(SOURCES
 	Source/Main.cpp
-	Source/Authentication/LoginLayer.h
-	Source/Authentication/LoginLayer.cpp
-	Source/Authentication/RegisterLayer.h
-	Source/Authentication/RegisterLayer.cpp
+	Source/Authentication/AuthenticationLayer.h
+	Source/Authentication/AuthenticationLayer.cpp
+	Source/Authentication/LoginView.h
+	Source/Authentication/LoginView.cpp
+	Source/Authentication/RegisterView.h
+	Source/Authentication/RegisterView.cpp
 	Source/NotificationLayer.h
 	Source/NotificationLayer.cpp
 	Source/Dashboard/DashboardLayer.h

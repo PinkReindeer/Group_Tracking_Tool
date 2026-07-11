@@ -1,16 +1,16 @@
 #pragma once
 
-#include "Platform/Layer.h"
 #include <string>
+#include "imgui.h"
 
-class RegisterLayer : public TrackingTool::Layer
+class RegisterView
 {
 public:
-	RegisterLayer() = default;
-	virtual ~RegisterLayer() = default;
+	RegisterView() = default;
+	~RegisterView() = default;
 
-	virtual void OnUpdate(float ts) override;
-	virtual void OnRender() override;
+	void OnUpdate(float ts);
+	bool Render(const ImVec2& containerSize, bool& outWantToSwitch);
 
 private:
 	char m_UserName[256] = {};
