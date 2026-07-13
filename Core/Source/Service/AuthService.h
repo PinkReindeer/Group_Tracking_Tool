@@ -14,7 +14,9 @@ namespace TrackingTool
 		static bool Login(const std::string& userName, const std::string& password, std::string& outMessage);
 		static void Logout();
 		
-		static std::string GetLoggedInUser();
+		// Returns a reference to the cached username — no allocation. Do not store
+		// the reference across Logout() (it is cleared there).
+		static const std::string& GetLoggedInUser();
 		static bool IsLoggedIn();
 		
 	private:
