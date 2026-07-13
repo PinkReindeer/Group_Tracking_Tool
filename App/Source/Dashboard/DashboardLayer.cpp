@@ -36,12 +36,12 @@ void DashboardLayer::OnUpdate(float ts)
 {
 }
 
-void DashboardLayer::RefreshProjects(bool showNotification)
+void DashboardLayer::RefreshProjects(bool forceRefresh, bool showNotification)
 {
 	std::string message;
 	std::vector<TrackingTool::ProjectInfo> projects;
 
-	if (TrackingTool::ProjectService::GetUserProjects(projects, message))
+	if (TrackingTool::ProjectService::GetUserProjects(projects, message, forceRefresh))
 	{
 		m_Projects = std::move(projects);
 		if (showNotification)
@@ -125,7 +125,7 @@ void DashboardLayer::OnRenderContent()
 	ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f, 3.0f));
 	if (ImGui::Button(ICON_FA_ARROWS_ROTATE " Live Refresh"))
 	{
-		RefreshProjects(true);
+		RefreshProjects(true, true);
 	}
 	ImGui::PopStyleVar(2);
 	ImGui::PopStyleColor(4);
@@ -141,7 +141,10 @@ void DashboardLayer::OnRenderContent()
 	ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
 	ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 2.0f);
 	ImGui::PushStyleColor(ImGuiCol_Text, whiteText);
-	if (ImGui::Button(ICON_FA_RIGHT_TO_BRACKET " Join Project", ImVec2(btnWidth, 32.0f))) {}
+	if (ImGui::Button(ICON_FA_RIGHT_TO_BRACKET " Join Project", ImVec2(btnWidth, 32.0f)))
+	{
+		ImGui::OpenPopup("Join Project");
+	}
 	ImGui::PopStyleColor(3);
 	ImGui::PopStyleVar(2);
 	
@@ -160,15 +163,112 @@ void DashboardLayer::OnRenderContent()
 	ImGui::PopStyleColor(4);
 	ImGui::PopStyleVar();
 
-	// Modal popup for creating a project
-	ImVec2 center = ImGui::GetMainViewport()->GetCenter();
-	ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-	
+	// Shared modal chrome (Join + Create)
+	const ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+
 	ImGui::PushStyleColor(ImGuiCol_PopupBg, boxBgColor);
 	ImGui::PushStyleColor(ImGuiCol_Border, borderColor);
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 6.0f);
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(24.0f, 24.0f));
 
+	// Modal popup for joining a project by invite code
+	// SetNextWindowPos must be immediately before BeginPopupModal (same pattern as Create).
+	ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+	if (ImGui::BeginPopupModal("Join Project", NULL, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar))
+	{
+		ImGui::PushStyleColor(ImGuiCol_Text, whiteText);
+		ImGui::SetWindowFontScale(1.2f);
+		ImGui::Text(ICON_FA_RIGHT_TO_BRACKET " Join Project");
+		ImGui::SetWindowFontScale(1.0f);
+		ImGui::PopStyleColor();
+
+		ImGui::Dummy(ImVec2(0.0f, 8.0f));
+
+		// Cap wrap width so AlwaysAutoResize doesn't stretch to the full parent width
+		// (which made the dialog look off-center compared to Create Project).
+		ImGui::PushStyleColor(ImGuiCol_Text, grayText);
+		ImGui::PushTextWrapPos(ImGui::GetCursorPos().x + 350.0f);
+		ImGui::TextWrapped("Enter the 6-character invite code shared by the project leader.");
+		ImGui::PopTextWrapPos();
+		ImGui::PopStyleColor();
+
+		ImGui::Dummy(ImVec2(0.0f, 15.0f));
+
+		ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(15.0f / 255.0f, 16.0f / 255.0f, 16.0f / 255.0f, 1.0f));
+		ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(35.0f / 255.0f, 38.0f / 255.0f, 38.0f / 255.0f, 1.0f));
+		ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(45.0f / 255.0f, 48.0f / 255.0f, 48.0f / 255.0f, 1.0f));
+		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
+		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10.0f, 10.0f));
+
+		ImGui::PushStyleColor(ImGuiCol_Text, grayText);
+		ImGui::Text("PROJECT CODE");
+		ImGui::PopStyleColor();
+
+		ImGui::PushStyleColor(ImGuiCol_Text, whiteText);
+		ImGui::SetNextItemWidth(350.0f);
+		if (ImGui::IsWindowAppearing())
+			ImGui::SetKeyboardFocusHere();
+		const bool submitJoin = ImGui::InputText("##JoinProjectCode", m_JoinProjectCode, IM_ARRAYSIZE(m_JoinProjectCode),
+			ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_CharsUppercase);
+		ImGui::PopStyleColor();
+
+		ImGui::PopStyleVar(2);
+		ImGui::PopStyleColor(3);
+
+		ImGui::Dummy(ImVec2(0.0f, 20.0f));
+
+		const float modalBtnWidth = (350.0f - 10.0f) / 2.0f;
+
+		auto tryJoinProject = [&]() {
+			std::string message;
+			std::string projectName;
+			if (TrackingTool::ProjectService::JoinProject(m_JoinProjectCode, message, projectName))
+			{
+				TrackingTool::Application::Get().PushNotification(message, NotificationType::Info);
+				RefreshProjects(false);
+				memset(m_JoinProjectCode, 0, sizeof(m_JoinProjectCode));
+				ImGui::CloseCurrentPopup();
+			}
+			else
+			{
+				TrackingTool::Application::Get().PushNotification(message, NotificationType::Error);
+			}
+		};
+
+		// Cancel
+		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+		ImGui::PushStyleColor(ImGuiCol_Border, borderColor);
+		ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
+		ImGui::PushStyleColor(ImGuiCol_Text, whiteText);
+		if (ImGui::Button("Cancel", ImVec2(modalBtnWidth, 36.0f)))
+		{
+			ImGui::CloseCurrentPopup();
+		}
+		ImGui::PopStyleColor(3);
+		ImGui::PopStyleVar(2);
+
+		ImGui::SameLine(0, 10.0f);
+
+		// Join
+		ImGui::PushStyleColor(ImGuiCol_Button, cyanColor);
+		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.0f, 193.0f / 255.0f, 201.0f / 255.0f, 1.0f));
+		ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.0f, 153.0f / 255.0f, 161.0f / 255.0f, 1.0f));
+		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
+		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(18.0f / 255.0f, 20.0f / 255.0f, 20.0f / 255.0f, 1.0f));
+		if (ImGui::Button("Join", ImVec2(modalBtnWidth, 36.0f)) || submitJoin)
+		{
+			tryJoinProject();
+		}
+		ImGui::SetItemDefaultFocus();
+		ImGui::PopStyleColor(4);
+		ImGui::PopStyleVar();
+
+		ImGui::EndPopup();
+	}
+
+	// Modal popup for creating a project
+	ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
 	if (ImGui::BeginPopupModal("Create Project", NULL, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar))
 	{
 		// Header
@@ -268,10 +368,14 @@ void DashboardLayer::OnRenderContent()
 	ImGui::Dummy(ImVec2(0.0f, 20.0f));
 
 	// Project Grid
+	// Horizontal gap is applied via SameLine; vertical gap between rows uses ItemSpacing.y.
+	constexpr float kProjectCardGapX = 20.0f;
+	constexpr float kProjectCardGapY = 24.0f;
 	ImGui::PushStyleColor(ImGuiCol_ChildBg, boxBgColor);
 	ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 4.0f);
 	ImGui::PushStyleColor(ImGuiCol_Border, borderColor);
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
+	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(kProjectCardGapX, kProjectCardGapY));
 
 	float windowVisibleX2 = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x;
 	for (size_t i = 0; i < m_Projects.size(); ++i)
@@ -293,17 +397,10 @@ void DashboardLayer::OnRenderContent()
 			ImVec2 roleBadgePos = ImGui::GetCursorScreenPos();
 			roleBadgePos.y -= 2.0f;
 			ImVec2 roleBadgeSize = ImVec2(isLeader ? 60.0f : 68.0f, 18.0f);
-			ImGui::GetWindowDrawList()->AddRectFilled(
-				roleBadgePos,
-				ImVec2(roleBadgePos.x + roleBadgeSize.x, roleBadgePos.y + roleBadgeSize.y),
-				ImGui::GetColorU32(ImVec4(0.0f, 173.0f/255.0f, 181.0f/255.0f, 0.2f)),
-				9.0f);
-			ImGui::GetWindowDrawList()->AddText(
-				ImGui::GetFont(),
-				ImGui::GetFontSize() * 0.7f,
-				ImVec2(roleBadgePos.x + 8.0f, roleBadgePos.y + 2.0f),
-				ImGui::GetColorU32(cyanColor),
-				roleLabel);
+			ImGui::GetWindowDrawList()->AddRectFilled(roleBadgePos, ImVec2(roleBadgePos.x + roleBadgeSize.x, roleBadgePos.y + roleBadgeSize.y),
+				ImGui::GetColorU32(ImVec4(0.0f, 173.0f/255.0f, 181.0f/255.0f, 0.2f)), 9.0f);
+			ImGui::GetWindowDrawList()->AddText(ImGui::GetFont(), ImGui::GetFontSize() * 0.7f, ImVec2(roleBadgePos.x + 8.0f, roleBadgePos.y + 2.0f),
+				ImGui::GetColorU32(cyanColor), roleLabel);
 
 			// 3-dots icon
 			ImGui::SetCursorPos(ImVec2(300.0f - 30.0f, 20.0f));
@@ -329,11 +426,11 @@ void DashboardLayer::OnRenderContent()
 		ImGui::EndChild();
 
 		float last_item_x2 = ImGui::GetItemRectMax().x;
-		float next_item_x2 = last_item_x2 + 20.0f + 300.0f;
+		float next_item_x2 = last_item_x2 + kProjectCardGapX + 300.0f;
 		if (i + 1 < m_Projects.size() && next_item_x2 < windowVisibleX2)
-			ImGui::SameLine(0, 20.0f);
+			ImGui::SameLine(0, kProjectCardGapX);
 	}
 
-	ImGui::PopStyleVar(2);
+	ImGui::PopStyleVar(3);
 	ImGui::PopStyleColor(2);
 }
