@@ -91,7 +91,7 @@ namespace TrackingTool
 		s_LoggedInUser.clear();
 	}
 
-	std::string AuthService::GetLoggedInUser()
+	const std::string& AuthService::GetLoggedInUser()
 	{
 		return s_LoggedInUser;
 	}

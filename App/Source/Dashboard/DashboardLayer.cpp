@@ -6,17 +6,23 @@
 #include "Platform/Application.h"
 #include "Service/ProjectService.h"
 
-#include <algorithm>
 #include <cctype>
+#include <cstdio>
 
 namespace
 {
+	// Case-insensitive compare without heap allocation (called every frame per project card).
 	bool IsLeaderRole(const std::string& role)
 	{
-		std::string lower = role;
-		std::transform(lower.begin(), lower.end(), lower.begin(),
-			[](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-		return lower == "leader";
+		static constexpr char kLeader[] = "leader";
+		if (role.size() != sizeof(kLeader) - 1)
+			return false;
+		for (size_t i = 0; i < role.size(); ++i)
+		{
+			if (static_cast<char>(std::tolower(static_cast<unsigned char>(role[i]))) != kLeader[i])
+				return false;
+		}
+		return true;
 	}
 }
 
@@ -92,8 +98,9 @@ void DashboardLayer::OnRenderContent()
 		drawList->AddText(ImGui::GetFont(), ImGui::GetFontSize() * 2.5f, textPos, ImGui::GetColorU32(valueColor), value);
 	};
 
-	std::string projectCountStr = std::to_string(m_Projects.size());
-	DrawStatBox(0, "PROJECT", projectCountStr.c_str(), cyanColor, cyanColor, cyanColor);
+	char projectCountStr[16];
+	std::snprintf(projectCountStr, sizeof(projectCountStr), "%zu", m_Projects.size());
+	DrawStatBox(0, "PROJECT", projectCountStr, cyanColor, cyanColor, cyanColor);
 	DrawStatBox(1, "PENDING TASKS", "0", grayText, whiteText, ImVec4(80.0f/255.0f, 80.0f/255.0f, 80.0f/255.0f, 1.0f));
 	DrawStatBox(2, "IN PROGRESS", "0", blueColor, blueColor, blueColor);
 	DrawStatBox(3, "OVERDUE", "0", redColor, redColor, redColor);
@@ -270,9 +277,8 @@ void DashboardLayer::OnRenderContent()
 	for (size_t i = 0; i < m_Projects.size(); ++i)
 	{
 		const auto& project = m_Projects[i];
-		std::string childId = "Project_" + std::to_string(project.Id);
-		
-		if (ImGui::BeginChild(childId.c_str(), ImVec2(300.0f, 150.0f), true, ImGuiWindowFlags_NoScrollbar))
+		// Use stable integer ID — avoids heap-allocating a std::string every frame.
+		if (ImGui::BeginChild(static_cast<ImGuiID>(project.Id), ImVec2(300.0f, 150.0f), true, ImGuiWindowFlags_NoScrollbar))
 		{
 			ImGui::SetCursorPos(ImVec2(20.0f, 20.0f));
 			ImGui::PushStyleColor(ImGuiCol_Text, whiteText);

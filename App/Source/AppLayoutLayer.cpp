@@ -191,7 +191,7 @@ void AppLayoutLayer::RenderTopNavBar()
 		ImGui::SetWindowFontScale(1.0f);
 		ImGui::PopStyleColor();
 
-		// Right side items
+		// Right side items — GetLoggedInUser() returns a const ref to cached state (no per-frame alloc).
 		const std::string& loggedInUser = TrackingTool::AuthService::GetLoggedInUser();
 		const char* nameText = loggedInUser.c_str();
 		float rightPadding = 30.0f;
@@ -199,21 +199,21 @@ void AppLayoutLayer::RenderTopNavBar()
 		
 		ImGui::SetCursorPos(ImVec2(childSize.x - rightPadding - nameWidth, centerY));
 		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(226.0f / 255.0f, 226.0f / 255.0f, 226.0f / 255.0f, 1.0f)); // #E2E2E2
-		ImGui::Text("%s", nameText);
+		ImGui::TextUnformatted(nameText);
 		ImGui::PopStyleColor();
 		
 		// Gear Icon
 		float gearWidth = ImGui::CalcTextSize(ICON_FA_GEAR).x;
 		ImGui::SetCursorPos(ImVec2(childSize.x - rightPadding - nameWidth - gearWidth - 20.0f, centerY));
 		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(187.0f / 255.0f, 201.0f / 255.0f, 202.0f / 255.0f, 1.0f)); // #BBC9CA
-		ImGui::Text(ICON_FA_GEAR);
+		ImGui::TextUnformatted(ICON_FA_GEAR);
 		ImGui::PopStyleColor();
 		
 		// Bell Icon
 		float bellWidth = ImGui::CalcTextSize(ICON_FA_BELL).x;
 		ImGui::SetCursorPos(ImVec2(childSize.x - rightPadding - nameWidth - gearWidth - 20.0f - bellWidth - 20.0f, centerY));
 		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(187.0f / 255.0f, 201.0f / 255.0f, 202.0f / 255.0f, 1.0f));
-		ImGui::Text(ICON_FA_BELL);
+		ImGui::TextUnformatted(ICON_FA_BELL);
 		ImGui::PopStyleColor();
 
 		// Allow extensions
