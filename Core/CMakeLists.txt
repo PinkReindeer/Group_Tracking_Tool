@@ -16,9 +16,15 @@ set(SOURCES
     Source/Database/Database.cpp
     Source/Service/AuthService.h
     Source/Service/AuthService.cpp
+    Source/Service/ProjectService.h
+    Source/Service/ProjectService.cpp
     Vendor/stb/stb_image.h
     Vendor/stb/stb_image.cpp
-)
+    Source/Utils/Random.h
+    Source/Utils/ProjectUtils.h
+    Source/Utils/ProjectUtils.cpp
+    Source/Utils/TimeUtils.h
+    Source/Utils/TimeUtils.cpp)
 
 add_library(Core STATIC)
 

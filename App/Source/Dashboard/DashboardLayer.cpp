@@ -1,10 +1,53 @@
-﻿#include "imgui.h"
+#include "imgui.h"
 #include "IconsFontAwesome6.h"
 
 #include "DashboardLayer.h"
 
+#include "Platform/Application.h"
+#include "Service/ProjectService.h"
+
+#include <algorithm>
+#include <cctype>
+
+namespace
+{
+	bool IsLeaderRole(const std::string& role)
+	{
+		std::string lower = role;
+		std::transform(lower.begin(), lower.end(), lower.begin(),
+			[](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+		return lower == "leader";
+	}
+}
+
+DashboardLayer::DashboardLayer()
+{
+	// Load projects for the logged-in user when entering the dashboard.
+	RefreshProjects(false);
+}
+
 void DashboardLayer::OnUpdate(float ts)
 {
+}
+
+void DashboardLayer::RefreshProjects(bool showNotification)
+{
+	std::string message;
+	std::vector<TrackingTool::ProjectInfo> projects;
+
+	if (TrackingTool::ProjectService::GetUserProjects(projects, message))
+	{
+		m_Projects = std::move(projects);
+		if (showNotification)
+		{
+			const std::string info = "Projects refreshed (" + std::to_string(m_Projects.size()) + ").";
+			TrackingTool::Application::Get().PushNotification(info, NotificationType::Info);
+		}
+	}
+	else if (showNotification)
+	{
+		TrackingTool::Application::Get().PushNotification(message, NotificationType::Error);
+	}
 }
 
 void DashboardLayer::OnRenderContent()
@@ -49,7 +92,8 @@ void DashboardLayer::OnRenderContent()
 		drawList->AddText(ImGui::GetFont(), ImGui::GetFontSize() * 2.5f, textPos, ImGui::GetColorU32(valueColor), value);
 	};
 
-	DrawStatBox(0, "PROJECT", "01", cyanColor, cyanColor, cyanColor);
+	std::string projectCountStr = std::to_string(m_Projects.size());
+	DrawStatBox(0, "PROJECT", projectCountStr.c_str(), cyanColor, cyanColor, cyanColor);
 	DrawStatBox(1, "PENDING TASKS", "0", grayText, whiteText, ImVec4(80.0f/255.0f, 80.0f/255.0f, 80.0f/255.0f, 1.0f));
 	DrawStatBox(2, "IN PROGRESS", "0", blueColor, blueColor, blueColor);
 	DrawStatBox(3, "OVERDUE", "0", redColor, redColor, redColor);
@@ -64,16 +108,20 @@ void DashboardLayer::OnRenderContent()
 	ImGui::PopStyleColor();
 
 	ImGui::SameLine();
-	
-	// Live Refresh Badge
-	ImVec2 badgePos = ImGui::GetCursorScreenPos();
-	badgePos.y += 2.0f; // vertical tweak
-	ImVec2 badgeSize = ImVec2(90.0f, 20.0f);
-	drawList->AddRectFilled(badgePos, ImVec2(badgePos.x + badgeSize.x, badgePos.y + badgeSize.y), IM_COL32(51, 53, 53, 255), 4.0f);
-	drawList->AddText(ImGui::GetFont(), ImGui::GetFontSize() * 0.7f, ImVec2(badgePos.x + 8.0f, badgePos.y + 3.0f), ImGui::GetColorU32(grayText), "LIVE REFRESH");
-	
-	// Advance cursor past the badge manually
-	ImGui::SetCursorPosX(ImGui::GetCursorPosX() + badgeSize.x + 10.0f);
+
+	// Live Refresh — clickable control (reloads projects from DB via projectmember)
+	ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(51.0f / 255.0f, 53.0f / 255.0f, 53.0f / 255.0f, 1.0f));
+	ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(70.0f / 255.0f, 73.0f / 255.0f, 73.0f / 255.0f, 1.0f));
+	ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(40.0f / 255.0f, 42.0f / 255.0f, 42.0f / 255.0f, 1.0f));
+	ImGui::PushStyleColor(ImGuiCol_Text, grayText);
+	ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
+	ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f, 3.0f));
+	if (ImGui::Button(ICON_FA_ARROWS_ROTATE " Live Refresh"))
+	{
+		RefreshProjects(true);
+	}
+	ImGui::PopStyleVar(2);
+	ImGui::PopStyleColor(4);
 
 	// Right aligned buttons
 	float btnWidth = 140.0f;
@@ -86,7 +134,7 @@ void DashboardLayer::OnRenderContent()
 	ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
 	ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 2.0f);
 	ImGui::PushStyleColor(ImGuiCol_Text, whiteText);
-	if (ImGui::Button(ICON_FA_RIGHT_TO_BRACKET " JOIN PROJECT", ImVec2(btnWidth, 32.0f))) {}
+	if (ImGui::Button(ICON_FA_RIGHT_TO_BRACKET " Join Project", ImVec2(btnWidth, 32.0f))) {}
 	ImGui::PopStyleColor(3);
 	ImGui::PopStyleVar(2);
 	
@@ -98,9 +146,117 @@ void DashboardLayer::OnRenderContent()
 	ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.0f, 153.0f/255.0f, 161.0f/255.0f, 1.0f));
 	ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 2.0f);
 	ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(18.0f/255.0f, 20.0f/255.0f, 20.0f/255.0f, 1.0f)); // Dark text
-	if (ImGui::Button(ICON_FA_PLUS " NEW PROJECT", ImVec2(btnWidth, 32.0f))) {}
+	if (ImGui::Button(ICON_FA_PLUS " New Project", ImVec2(btnWidth, 32.0f)))
+	{
+		ImGui::OpenPopup("Create Project");
+	}
 	ImGui::PopStyleColor(4);
 	ImGui::PopStyleVar();
+
+	// Modal popup for creating a project
+	ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+	ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+	
+	ImGui::PushStyleColor(ImGuiCol_PopupBg, boxBgColor);
+	ImGui::PushStyleColor(ImGuiCol_Border, borderColor);
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 6.0f);
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(24.0f, 24.0f));
+
+	if (ImGui::BeginPopupModal("Create Project", NULL, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar))
+	{
+		// Header
+		ImGui::PushStyleColor(ImGuiCol_Text, whiteText);
+		ImGui::SetWindowFontScale(1.2f);
+		ImGui::Text(ICON_FA_PLUS " Create New Project");
+		ImGui::SetWindowFontScale(1.0f);
+		ImGui::PopStyleColor();
+
+		ImGui::Dummy(ImVec2(0.0f, 15.0f));
+
+		// Frame styling for inputs
+		ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(15.0f / 255.0f, 16.0f / 255.0f, 16.0f / 255.0f, 1.0f));
+		ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(35.0f / 255.0f, 38.0f / 255.0f, 38.0f / 255.0f, 1.0f));
+		ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(45.0f / 255.0f, 48.0f / 255.0f, 48.0f / 255.0f, 1.0f));
+		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
+		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10.0f, 10.0f));
+
+		ImGui::PushStyleColor(ImGuiCol_Text, grayText);
+		ImGui::Text("PROJECT NAME");
+		ImGui::PopStyleColor();
+
+		ImGui::PushStyleColor(ImGuiCol_Text, whiteText);
+		ImGui::SetNextItemWidth(350.0f);
+		if (ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
+		ImGui::InputText("##ProjectName", m_NewProjectName, IM_ARRAYSIZE(m_NewProjectName));
+		ImGui::PopStyleColor();
+		
+		ImGui::Dummy(ImVec2(0.0f, 10.0f));
+
+		ImGui::PushStyleColor(ImGuiCol_Text, grayText);
+		ImGui::Text("DESCRIPTION (OPTIONAL)");
+		ImGui::PopStyleColor();
+
+		ImGui::PushStyleColor(ImGuiCol_Text, whiteText);
+		ImGui::InputTextMultiline("##ProjectDesc", m_NewProjectDescription, IM_ARRAYSIZE(m_NewProjectDescription), ImVec2(350.0f, 100.0f));
+		ImGui::PopStyleColor();
+		
+		ImGui::PopStyleVar(2);
+		ImGui::PopStyleColor(3);
+		
+		ImGui::Dummy(ImVec2(0.0f, 20.0f));
+
+		float modalBtnWidth = (350.0f - 10.0f) / 2.0f;
+
+		// Cancel Button
+		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+		ImGui::PushStyleColor(ImGuiCol_Border, borderColor);
+		ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
+		ImGui::PushStyleColor(ImGuiCol_Text, whiteText);
+		if (ImGui::Button("Cancel", ImVec2(modalBtnWidth, 36.0f)))
+		{
+			ImGui::CloseCurrentPopup();
+		}
+		ImGui::PopStyleColor(3);
+		ImGui::PopStyleVar(2);
+
+		ImGui::SameLine(0, 10.0f);
+
+		// Create Button
+		ImGui::PushStyleColor(ImGuiCol_Button, cyanColor);
+		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.0f, 193.0f / 255.0f, 201.0f / 255.0f, 1.0f));
+		ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.0f, 153.0f / 255.0f, 161.0f / 255.0f, 1.0f));
+		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
+		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(18.0f / 255.0f, 20.0f / 255.0f, 20.0f / 255.0f, 1.0f));
+		if (ImGui::Button("Create", ImVec2(modalBtnWidth, 36.0f)))
+		{
+			std::string name = m_NewProjectName;
+			std::string desc = m_NewProjectDescription;
+			std::string message;
+			std::string code;
+
+			if (TrackingTool::ProjectService::CreateProject(name, desc, message, code))
+			{
+				TrackingTool::Application::Get().PushNotification(message, NotificationType::Info);
+				RefreshProjects(false);
+
+				memset(m_NewProjectName, 0, sizeof(m_NewProjectName));
+				memset(m_NewProjectDescription, 0, sizeof(m_NewProjectDescription));
+				ImGui::CloseCurrentPopup();
+			}
+			else
+			{
+				TrackingTool::Application::Get().PushNotification(message, NotificationType::Error);
+			}
+		}
+		ImGui::SetItemDefaultFocus();
+		ImGui::PopStyleColor(4);
+		ImGui::PopStyleVar();
+
+		ImGui::EndPopup();
+	}
+	ImGui::PopStyleVar(2);
+	ImGui::PopStyleColor(2);
 
 	ImGui::Dummy(ImVec2(0.0f, 20.0f));
 
@@ -110,36 +266,67 @@ void DashboardLayer::OnRenderContent()
 	ImGui::PushStyleColor(ImGuiCol_Border, borderColor);
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
 
-	if (ImGui::BeginChild("Project1", ImVec2(300.0f, 150.0f), true, ImGuiWindowFlags_NoScrollbar))
+	float windowVisibleX2 = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x;
+	for (size_t i = 0; i < m_Projects.size(); ++i)
 	{
-		ImGui::SetCursorPos(ImVec2(20.0f, 20.0f));
-		ImGui::PushStyleColor(ImGuiCol_Text, whiteText);
-		ImGui::Text("Group Tracking Tool");
-		ImGui::PopStyleColor();
-
-		ImGui::SameLine();
+		const auto& project = m_Projects[i];
+		std::string childId = "Project_" + std::to_string(project.Id);
 		
-		// Leader Badge
-		ImVec2 leaderBadgePos = ImGui::GetCursorScreenPos();
-		leaderBadgePos.y -= 2.0f;
-		ImVec2 leaderBadgeSize = ImVec2(60.0f, 18.0f);
-		ImGui::GetWindowDrawList()->AddRectFilled(leaderBadgePos, ImVec2(leaderBadgePos.x + leaderBadgeSize.x, leaderBadgePos.y + leaderBadgeSize.y), ImGui::GetColorU32(ImVec4(0.0f, 173.0f/255.0f, 181.0f/255.0f, 0.2f)), 9.0f);
-		ImGui::GetWindowDrawList()->AddText(ImGui::GetFont(), ImGui::GetFontSize() * 0.7f, ImVec2(leaderBadgePos.x + 8.0f, leaderBadgePos.y + 2.0f), ImGui::GetColorU32(cyanColor), ICON_FA_USER " Leader");
+		if (ImGui::BeginChild(childId.c_str(), ImVec2(300.0f, 150.0f), true, ImGuiWindowFlags_NoScrollbar))
+		{
+			ImGui::SetCursorPos(ImVec2(20.0f, 20.0f));
+			ImGui::PushStyleColor(ImGuiCol_Text, whiteText);
+			ImGui::Text("%s", project.Name.c_str());
+			ImGui::PopStyleColor();
 
-		// 3-dots icon
-		ImGui::SetCursorPos(ImVec2(300.0f - 30.0f, 20.0f));
-		ImGui::PushStyleColor(ImGuiCol_Text, grayText);
-		ImGui::Text(ICON_FA_ELLIPSIS_VERTICAL);
-		ImGui::PopStyleColor();
+			ImGui::SameLine();
+			
+			// Role badge (from projectmember.role)
+			const bool isLeader = IsLeaderRole(project.Role);
+			const char* roleLabel = isLeader ? ICON_FA_USER " Leader" : ICON_FA_USER " Member";
+			ImVec2 roleBadgePos = ImGui::GetCursorScreenPos();
+			roleBadgePos.y -= 2.0f;
+			ImVec2 roleBadgeSize = ImVec2(isLeader ? 60.0f : 68.0f, 18.0f);
+			ImGui::GetWindowDrawList()->AddRectFilled(
+				roleBadgePos,
+				ImVec2(roleBadgePos.x + roleBadgeSize.x, roleBadgePos.y + roleBadgeSize.y),
+				ImGui::GetColorU32(ImVec4(0.0f, 173.0f/255.0f, 181.0f/255.0f, 0.2f)),
+				9.0f);
+			ImGui::GetWindowDrawList()->AddText(
+				ImGui::GetFont(),
+				ImGui::GetFontSize() * 0.7f,
+				ImVec2(roleBadgePos.x + 8.0f, roleBadgePos.y + 2.0f),
+				ImGui::GetColorU32(cyanColor),
+				roleLabel);
 
-		ImGui::SetCursorPos(ImVec2(20.0f, 60.0f));
-		ImGui::PushStyleColor(ImGuiCol_Text, grayText);
-		ImGui::PushTextWrapPos(280.0f);
-		ImGui::Text("A desktop application for group tracking, built with C++20, OpenGL, and Dear ImGui");
-		ImGui::PopTextWrapPos();
-		ImGui::PopStyleColor();
+			// 3-dots icon
+			ImGui::SetCursorPos(ImVec2(300.0f - 30.0f, 20.0f));
+			ImGui::PushStyleColor(ImGuiCol_Text, grayText);
+			ImGui::Text(ICON_FA_ELLIPSIS_VERTICAL);
+			ImGui::PopStyleColor();
+
+			// Optional project code under name
+			ImGui::SetCursorPos(ImVec2(20.0f, 42.0f));
+			ImGui::PushStyleColor(ImGuiCol_Text, grayText);
+			ImGui::SetWindowFontScale(0.75f);
+			ImGui::Text("Code: %s", project.Code.c_str());
+			ImGui::SetWindowFontScale(1.0f);
+			ImGui::PopStyleColor();
+
+			ImGui::SetCursorPos(ImVec2(20.0f, 70.0f));
+			ImGui::PushStyleColor(ImGuiCol_Text, grayText);
+			ImGui::PushTextWrapPos(280.0f);
+			ImGui::TextUnformatted(project.Description.empty() ? "No description." : project.Description.c_str());
+			ImGui::PopTextWrapPos();
+			ImGui::PopStyleColor();
+		}
+		ImGui::EndChild();
+
+		float last_item_x2 = ImGui::GetItemRectMax().x;
+		float next_item_x2 = last_item_x2 + 20.0f + 300.0f;
+		if (i + 1 < m_Projects.size() && next_item_x2 < windowVisibleX2)
+			ImGui::SameLine(0, 20.0f);
 	}
-	ImGui::EndChild();
 
 	ImGui::PopStyleVar(2);
 	ImGui::PopStyleColor(2);

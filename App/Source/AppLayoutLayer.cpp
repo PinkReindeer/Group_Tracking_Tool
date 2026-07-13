@@ -4,6 +4,7 @@
 #include "IconsFontAwesome6.h"
 
 #include "AppLayoutLayer.h"
+#include "Service/AuthService.h"
 
 void AppLayoutLayer::OnRender()
 {
@@ -16,8 +17,8 @@ void AppLayoutLayer::OnRender()
 	ImGui::SetNextWindowSize(viewport->WorkSize, ImGuiCond_Always);
 	ImGui::SetNextWindowBgAlpha(0.0f); // Transparent main window
 
-	ImGuiWindowFlags mainFlags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | 
-		ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus;
+	ImGuiWindowFlags mainFlags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | 
+		ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus;
 
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
 	
@@ -61,7 +62,7 @@ void AppLayoutLayer::RenderSideNavBar()
 		ImVec2 pMax = ImVec2(pMin.x + childSize.x, pMin.y + childSize.y);
 		
 		// Draw right border
-		drawList->AddLine(ImVec2(pMax.x, pMin.y), ImVec2(pMax.x, pMax.y), IM_COL32(60, 73, 74, 255), 1.0f); // #3C494A
+		drawList->AddLine(ImVec2(pMax.x, pMin.y), ImVec2(pMax.x, pMax.y), IM_COL32(60, 73, 74, 255), 5.0f); // #3C494A
 		
 		ImGui::Dummy(ImVec2(0.0f, 30.0f)); // Top padding
 		
@@ -87,7 +88,7 @@ void AppLayoutLayer::RenderSideNavBar()
 		// 1. Dashboard (Active)
 		ImVec2 cursorPos = ImGui::GetCursorPos();
 		ImVec2 itemPMin = ImVec2(pMin.x, pMin.y + cursorPos.y);
-		ImVec2 itemPMax = ImVec2(pMin.x + sidebarWidth, itemPMin.y + menuItemHeight);
+		ImVec2 itemPMax = ImVec2(pMin.x + sidebarWidth - 2.0f, itemPMin.y + menuItemHeight);
 		
 		// Draw active background
 		drawList->AddRectFilled(itemPMin, itemPMax, IM_COL32(18, 20, 20, 255)); // #121414
@@ -124,8 +125,8 @@ void AppLayoutLayer::RenderSideNavBar()
 
 void AppLayoutLayer::RenderTopNavBar()
 {
-	float topbarHeight = 70.0f;
-	ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(26.0f / 255.0f, 28.0f / 255.0f, 28.0f / 255.0f, 1.0f)); // #1A1C1C
+	float topbarHeight = 41.0f;
+	ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(18.0f / 255.0f, 20.0f / 255.0f, 20.0f / 255.0f, 1.0f)); // #1A1C1C
 	
 	if (ImGui::BeginChild("TopNavBar", ImVec2(0, topbarHeight), false, ImGuiWindowFlags_NoScrollbar))
 	{
@@ -135,7 +136,7 @@ void AppLayoutLayer::RenderTopNavBar()
 		ImVec2 pMax = ImVec2(pMin.x + childSize.x, pMin.y + childSize.y);
 		
 		// Draw bottom border
-		drawList->AddLine(ImVec2(pMin.x, pMax.y), ImVec2(pMax.x, pMax.y), IM_COL32(60, 73, 74, 255), 1.0f); // #3C494A
+		drawList->AddLine(ImVec2(pMin.x, pMax.y), ImVec2(pMax.x, pMax.y), IM_COL32(60, 73, 74, 255), 3.0f); // #3C494A
 
 		float centerY = (topbarHeight - ImGui::GetTextLineHeight()) * 0.5f;
 
@@ -148,7 +149,8 @@ void AppLayoutLayer::RenderTopNavBar()
 		ImGui::PopStyleColor();
 
 		// Right side items
-		const char* nameText = "Alex Rivera";
+		const std::string& loggedInUser = TrackingTool::AuthService::GetLoggedInUser();
+		const char* nameText = loggedInUser.c_str();
 		float rightPadding = 30.0f;
 		float nameWidth = ImGui::CalcTextSize(nameText).x;
 		
