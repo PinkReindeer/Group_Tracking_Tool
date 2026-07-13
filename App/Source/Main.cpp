@@ -1,7 +1,8 @@
-#include "Platform/Application.h"
+﻿#include "Platform/Application.h"
 #include "Database/Database.h"
 
 #include "Authentication/AuthenticationLayer.h"
+#include "Dashboard/DashboardLayer.h"
 #include "NotificationLayer.h"
 
 int main()

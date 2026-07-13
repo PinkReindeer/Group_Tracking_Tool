@@ -6,6 +6,8 @@
 namespace TrackingTool
 {
 
+	std::string AuthService::s_LoggedInUser = "";
+
 	bool AuthService::Register(const std::string& userName, const std::string& password, const std::string& confirmPassword, std::string& outMessage)
 	{
 		outMessage.clear();
@@ -67,6 +69,7 @@ namespace TrackingTool
 		{
 			if (BCrypt::validatePassword(password, hashedPassword))
 			{
+				s_LoggedInUser = userName;
 				outMessage = "Login successful.";
 				return true;
 			}
@@ -81,6 +84,21 @@ namespace TrackingTool
 			outMessage = std::string("Invalid password format in database.") + e.what();
 			return false;
 		}
+	}
+
+	void AuthService::Logout()
+	{
+		s_LoggedInUser.clear();
+	}
+
+	std::string AuthService::GetLoggedInUser()
+	{
+		return s_LoggedInUser;
+	}
+
+	bool AuthService::IsLoggedIn()
+	{
+		return !s_LoggedInUser.empty();
 	}
 
 }
