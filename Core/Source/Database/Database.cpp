@@ -232,6 +232,76 @@ namespace TrackingTool
         }
     }
 
+    JoinProjectResult Database::JoinProjectByCode(const std::string& projectCode, const std::string& userName, const std::string& joinDate, std::string& outProjectName)
+    {
+        outProjectName.clear();
+
+        if (!s_Connection || !s_Connection->is_open())
+        {
+            Log::Error("DB_JoinProjectByCode: Database is not connected!");
+            return JoinProjectResult::Error;
+        }
+
+        try
+        {
+            pqxx::work txn(*s_Connection);
+
+            // Resolve the user first so we fail clearly if the session is stale.
+            pqxx::result userRes = txn.exec_params("SELECT userid FROM users WHERE username = $1", userName);
+            if (userRes.empty())
+            {
+                Log::Error("DB_JoinProjectByCode: user '{}' not found.", userName);
+                return JoinProjectResult::UserNotFound;
+            }
+            const std::string userId = userRes[0][0].as<std::string>();
+
+            // Project codes are stored uppercase (see GenerateProjectCode).
+            pqxx::result projectRes = txn.exec_params(
+                "SELECT projectid, projectname FROM project WHERE projectcode = $1",
+                projectCode);
+            if (projectRes.empty())
+            {
+                Log::Warn("DB_JoinProjectByCode: no project with code '{}'", projectCode);
+                return JoinProjectResult::ProjectNotFound;
+            }
+
+            const int projectId = projectRes[0][0].as<int>();
+            outProjectName = projectRes[0][1].as<std::string>();
+
+            // Already a member?
+            pqxx::result memberRes = txn.exec_params("SELECT 1 FROM projectmember WHERE projectid = $1 AND userid = $2", projectId, userId);
+            if (!memberRes.empty())
+            {
+                Log::Warn("DB_JoinProjectByCode: user '{}' already in project '{}'", userName, projectCode);
+                return JoinProjectResult::AlreadyMember;
+            }
+
+            txn.exec_params("INSERT INTO projectmember (projectid, userid, role, joindate) VALUES ($1, $2, $3, $4)", projectId, userId, "member", joinDate);
+
+            txn.commit();
+
+            Log::Info("DB_JoinProjectByCode: user '{}' joined project '{}' ({}) as member", userName, outProjectName, projectCode);
+            return JoinProjectResult::Success;
+        }
+        catch (const pqxx::sql_error& e)
+        {
+            // Race: unique constraint if another concurrent join inserted the same row.
+            if (std::string(e.sqlstate()) == "23505")
+            {
+                Log::Warn("DB_JoinProjectByCode: unique constraint — already a member (code '{}')", projectCode);
+                return JoinProjectResult::AlreadyMember;
+            }
+
+            Log::Error("DB_JoinProjectByCode: {}", e.what());
+            return JoinProjectResult::Error;
+        }
+        catch (const std::exception& e)
+        {
+            Log::Error("DB_JoinProjectByCode: {}", e.what());
+            return JoinProjectResult::Error;
+        }
+    }
+
     bool Database::GetProjectsForUser(const std::string& userName, std::vector<ProjectInfo>& outProjects)
     {
         outProjects.clear();

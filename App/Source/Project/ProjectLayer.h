@@ -23,6 +23,9 @@ protected:
 	virtual void OnRenderContent() override;
 	virtual void OnRenderTopNavBarExtensions() override;
 
+	virtual const char* GetActiveSidebarMenu() const override { return "Project"; }
+	virtual const char* GetTopNavBarTitle() const override { return "Project"; }
+
 private:
 	ProjectTab m_ActiveTab = ProjectTab::Tasks;
 

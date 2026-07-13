@@ -1,5 +1,7 @@
 #include "AuthService.h"
 
+#include "Service/ProjectService.h"
+
 #include <bcrypt/BCrypt.hpp>
 #include <cstring>
 
@@ -69,6 +71,8 @@ namespace TrackingTool
 		{
 			if (BCrypt::validatePassword(password, hashedPassword))
 			{
+				// Drop any previous session's project list before switching users.
+				ProjectService::InvalidateProjectsCache();
 				s_LoggedInUser = userName;
 				outMessage = "Login successful.";
 				return true;
@@ -88,6 +92,7 @@ namespace TrackingTool
 
 	void AuthService::Logout()
 	{
+		ProjectService::InvalidateProjectsCache();
 		s_LoggedInUser.clear();
 	}
 
