@@ -2,8 +2,6 @@
 #include "Database/Database.h"
 
 #include "Authentication/AuthenticationLayer.h"
-//#include "Dashboard/DashboardLayer.h"
-//#include "Project/ProjectLayer.h"
 #include "NotificationLayer.h"
 
 int main()
