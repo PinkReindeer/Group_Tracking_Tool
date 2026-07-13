@@ -26,9 +26,20 @@ private:
 	// showNotification: toast success/error (used by Live Refresh).
 	void RefreshProjects(bool forceRefresh = false, bool showNotification = false);
 
+	void RenderEditProjectModal();
+	void RenderDeleteProjectModal();
+
 	std::vector<TrackingTool::ProjectInfo> m_Projects;
 	bool m_ShowCreateProjectModal = false;
 	char m_NewProjectName[128] = "";
 	char m_NewProjectDescription[512] = "";
 	char m_JoinProjectCode[32] = "";
+
+	// Project card overflow menu (three-dot) → Edit / Delete
+	bool m_OpenEditProject = false;
+	bool m_OpenDeleteProject = false;
+	int m_ActionProjectId = 0;
+	std::string m_ActionProjectName;
+	char m_EditProjectName[128] = "";
+	char m_EditProjectDescription[512] = "";
 };

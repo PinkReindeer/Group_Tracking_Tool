@@ -6,6 +6,7 @@
 #include "AppLayoutLayer.h"
 #include "Service/AuthService.h"
 
+#include "Authentication/AuthenticationLayer.h"
 #include "Dashboard/DashboardLayer.h"
 #include "Project/ProjectLayer.h"
 
@@ -46,6 +47,10 @@ void AppLayoutLayer::OnRender()
 		ImGui::PopStyleColor();
 		
 		ImGui::EndGroup();
+
+		// Modal must live on the root layout window so its ID stack is stable
+		// across gear-menu popup close / top-bar child teardown.
+		RenderLogoutConfirmModal();
 	}
 	ImGui::End();
 
@@ -202,16 +207,53 @@ void AppLayoutLayer::RenderTopNavBar()
 		ImGui::TextUnformatted(nameText);
 		ImGui::PopStyleColor();
 		
-		// Gear Icon
+		// Gear Icon (settings menu: Logout, ...)
 		float gearWidth = ImGui::CalcTextSize(ICON_FA_GEAR).x;
-		ImGui::SetCursorPos(ImVec2(childSize.x - rightPadding - nameWidth - gearWidth - 20.0f, centerY));
+		const float gearX = childSize.x - rightPadding - nameWidth - gearWidth - 20.0f;
+		ImGui::SetCursorPos(ImVec2(gearX, centerY));
+
+		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0, 0, 0, 0));
+		ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0, 0, 0, 0));
 		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(187.0f / 255.0f, 201.0f / 255.0f, 202.0f / 255.0f, 1.0f)); // #BBC9CA
-		ImGui::TextUnformatted(ICON_FA_GEAR);
-		ImGui::PopStyleColor();
+		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, 0.0f));
+		if (ImGui::Button(ICON_FA_GEAR "##Settings"))
+		{
+			ImGui::OpenPopup("##UserSettings");
+		}
+		if (ImGui::IsItemHovered())
+			ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+		ImGui::PopStyleVar();
+		ImGui::PopStyleColor(4);
+
+		// Settings dropdown anchored under the gear button
+		ImGui::PushStyleColor(ImGuiCol_PopupBg, ImVec4(26.0f / 255.0f, 28.0f / 255.0f, 28.0f / 255.0f, 1.0f)); // #1A1C1C
+		ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(60.0f / 255.0f, 73.0f / 255.0f, 74.0f / 255.0f, 1.0f)); // #3C494A
+		ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.0f, 173.0f / 255.0f, 181.0f / 255.0f, 0.25f));
+		ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.0f, 173.0f / 255.0f, 181.0f / 255.0f, 0.40f));
+		ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.0f, 173.0f / 255.0f, 181.0f / 255.0f, 0.55f));
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 4.0f);
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 8.0f));
+		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8.0f, 8.0f));
+
+		if (ImGui::BeginPopup("##UserSettings"))
+		{
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(226.0f / 255.0f, 226.0f / 255.0f, 226.0f / 255.0f, 1.0f)); // #E2E2E2
+			if (ImGui::Selectable(ICON_FA_RIGHT_FROM_BRACKET "  Logout", false, 0, ImVec2(140.0f, 0.0f)))
+			{
+				// Defer OpenPopup for the modal to the root layout window.
+				m_OpenLogoutConfirm = true;
+			}
+			ImGui::PopStyleColor();
+			ImGui::EndPopup();
+		}
+
+		ImGui::PopStyleVar(3);
+		ImGui::PopStyleColor(5);
 		
 		// Bell Icon
 		float bellWidth = ImGui::CalcTextSize(ICON_FA_BELL).x;
-		ImGui::SetCursorPos(ImVec2(childSize.x - rightPadding - nameWidth - gearWidth - 20.0f - bellWidth - 20.0f, centerY));
+		ImGui::SetCursorPos(ImVec2(gearX - bellWidth - 20.0f, centerY));
 		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(187.0f / 255.0f, 201.0f / 255.0f, 202.0f / 255.0f, 1.0f));
 		ImGui::TextUnformatted(ICON_FA_BELL);
 		ImGui::PopStyleColor();
@@ -222,4 +264,84 @@ void AppLayoutLayer::RenderTopNavBar()
 	ImGui::EndChild();
 	
 	ImGui::PopStyleColor();
+}
+
+void AppLayoutLayer::RenderLogoutConfirmModal()
+{
+	if (m_OpenLogoutConfirm)
+	{
+		ImGui::OpenPopup("Confirm Logout");
+		m_OpenLogoutConfirm = false;
+	}
+
+	const ImVec4 whiteText = ImVec4(226.0f / 255.0f, 226.0f / 255.0f, 226.0f / 255.0f, 1.0f); // #E2E2E2
+	const ImVec4 grayText = ImVec4(187.0f / 255.0f, 201.0f / 255.0f, 202.0f / 255.0f, 1.0f); // #BBC9CA
+	const ImVec4 boxBgColor = ImVec4(26.0f / 255.0f, 28.0f / 255.0f, 28.0f / 255.0f, 1.0f); // #1A1C1C
+	const ImVec4 borderColor = ImVec4(60.0f / 255.0f, 73.0f / 255.0f, 74.0f / 255.0f, 1.0f); // #3C494A
+	const ImVec4 redColor = ImVec4(238.0f / 255.0f, 56.0f / 255.0f, 56.0f / 255.0f, 1.0f); // #EE3838
+
+	const ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+	ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+	ImGui::PushStyleColor(ImGuiCol_PopupBg, boxBgColor);
+	ImGui::PushStyleColor(ImGuiCol_Border, borderColor);
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 6.0f);
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(24.0f, 24.0f));
+
+	if (ImGui::BeginPopupModal("Confirm Logout", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar))
+	{
+		ImGui::PushStyleColor(ImGuiCol_Text, whiteText);
+		ImGui::SetWindowFontScale(1.2f);
+		ImGui::Text(ICON_FA_RIGHT_FROM_BRACKET " Confirm Logout");
+		ImGui::SetWindowFontScale(1.0f);
+		ImGui::PopStyleColor();
+
+		ImGui::Dummy(ImVec2(0.0f, 8.0f));
+
+		ImGui::PushStyleColor(ImGuiCol_Text, grayText);
+		ImGui::PushTextWrapPos(ImGui::GetCursorPos().x + 350.0f);
+		ImGui::TextWrapped("Are you sure you want to log out? You will need to sign in again to continue.");
+		ImGui::PopTextWrapPos();
+		ImGui::PopStyleColor();
+
+		ImGui::Dummy(ImVec2(0.0f, 20.0f));
+
+		const float modalBtnWidth = (350.0f - 10.0f) / 2.0f;
+
+		// Cancel (default focus — safer for a destructive action)
+		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+		ImGui::PushStyleColor(ImGuiCol_Border, borderColor);
+		ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
+		ImGui::PushStyleColor(ImGuiCol_Text, whiteText);
+		if (ImGui::Button("Cancel", ImVec2(modalBtnWidth, 36.0f)))
+		{
+			ImGui::CloseCurrentPopup();
+		}
+		ImGui::SetItemDefaultFocus();
+		ImGui::PopStyleColor(3);
+		ImGui::PopStyleVar(2);
+
+		ImGui::SameLine(0, 10.0f);
+
+		// Confirm logout (destructive)
+		ImGui::PushStyleColor(ImGuiCol_Button, redColor);
+		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(255.0f / 255.0f, 76.0f / 255.0f, 76.0f / 255.0f, 1.0f));
+		ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(200.0f / 255.0f, 40.0f / 255.0f, 40.0f / 255.0f, 1.0f));
+		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
+		ImGui::PushStyleColor(ImGuiCol_Text, whiteText);
+		if (ImGui::Button("Logout", ImVec2(modalBtnWidth, 36.0f)))
+		{
+			ImGui::CloseCurrentPopup();
+			TrackingTool::AuthService::Logout();
+			TransitionTo<AuthenticationLayer>();
+		}
+		ImGui::PopStyleColor(4);
+		ImGui::PopStyleVar();
+
+		ImGui::EndPopup();
+	}
+
+	ImGui::PopStyleVar(2);
+	ImGui::PopStyleColor(2);
 }

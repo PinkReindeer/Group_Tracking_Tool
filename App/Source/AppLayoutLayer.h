@@ -21,4 +21,8 @@ protected:
 private:
 	void RenderSideNavBar();
 	void RenderTopNavBar();
+	void RenderLogoutConfirmModal();
+
+	// Set when the user chooses Logout from the gear menu; opens the confirm modal next frame.
+	bool m_OpenLogoutConfirm = false;
 };

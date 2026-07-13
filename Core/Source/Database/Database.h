@@ -23,6 +23,24 @@ namespace TrackingTool
         Error
     };
 
+    enum class UpdateProjectResult
+    {
+        Success,
+        ProjectNotFound,
+        Forbidden, // caller is not a leader of the project
+        UserNotFound,
+        Error
+    };
+
+    enum class DeleteProjectResult
+    {
+        Success,
+        ProjectNotFound,
+        Forbidden, // caller is not a leader of the project
+        UserNotFound,
+        Error
+    };
+
     struct ProjectInfo
     {
         int Id = 0;
@@ -53,6 +71,13 @@ namespace TrackingTool
         // Projects the user belongs to via projectmember (junction table).
         // Returns false on connection/query failure; true with outProjects possibly empty.
         static bool GetProjectsForUser(const std::string& userName, std::vector<ProjectInfo>& outProjects);
+
+        // Updates name/description. Only succeeds if userName is a leader of the project.
+        static UpdateProjectResult UpdateProject(int projectId, const std::string& projectName,
+            const std::string& description, const std::string& userName);
+
+        // Deletes the project and its memberships. Only succeeds if userName is a leader.
+        static DeleteProjectResult DeleteProject(int projectId, const std::string& userName);
     };
 
 }

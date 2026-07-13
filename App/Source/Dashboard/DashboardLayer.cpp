@@ -8,6 +8,7 @@
 
 #include <cctype>
 #include <cstdio>
+#include <cstring>
 
 namespace
 {
@@ -402,11 +403,76 @@ void DashboardLayer::OnRenderContent()
 			ImGui::GetWindowDrawList()->AddText(ImGui::GetFont(), ImGui::GetFontSize() * 0.7f, ImVec2(roleBadgePos.x + 8.0f, roleBadgePos.y + 2.0f),
 				ImGui::GetColorU32(cyanColor), roleLabel);
 
-			// 3-dots icon
-			ImGui::SetCursorPos(ImVec2(300.0f - 30.0f, 20.0f));
+			// 3-dots overflow menu (Edit / Delete)
+			ImGui::SetCursorPos(ImVec2(300.0f - 30.0f, 18.0f));
+			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0, 0, 0, 0));
+			ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0, 0, 0, 0));
 			ImGui::PushStyleColor(ImGuiCol_Text, grayText);
-			ImGui::Text(ICON_FA_ELLIPSIS_VERTICAL);
-			ImGui::PopStyleColor();
+			ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, 0.0f));
+
+			char menuBtnId[64];
+			std::snprintf(menuBtnId, sizeof(menuBtnId), ICON_FA_ELLIPSIS_VERTICAL "##menu%d", project.Id);
+			char menuPopupId[64];
+			std::snprintf(menuPopupId, sizeof(menuPopupId), "##ProjectActions%d", project.Id);
+
+			if (ImGui::Button(menuBtnId))
+				ImGui::OpenPopup(menuPopupId);
+			if (ImGui::IsItemHovered())
+				ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+
+			ImGui::PopStyleVar();
+			ImGui::PopStyleColor(4);
+
+			ImGui::PushStyleColor(ImGuiCol_PopupBg, boxBgColor);
+			ImGui::PushStyleColor(ImGuiCol_Border, borderColor);
+			ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.0f, 173.0f / 255.0f, 181.0f / 255.0f, 0.25f));
+			ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.0f, 173.0f / 255.0f, 181.0f / 255.0f, 0.40f));
+			ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.0f, 173.0f / 255.0f, 181.0f / 255.0f, 0.55f));
+			ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 4.0f);
+			ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 8.0f));
+			ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8.0f, 8.0f));
+
+			if (ImGui::BeginPopup(menuPopupId))
+			{
+				const bool canManage = isLeader;
+
+				ImGui::PushStyleColor(ImGuiCol_Text, whiteText);
+				if (ImGui::Selectable(ICON_FA_PEN "  Edit", false, canManage ? 0 : ImGuiSelectableFlags_Disabled, ImVec2(140.0f, 0.0f)))
+				{
+					m_ActionProjectId = project.Id;
+					m_ActionProjectName = project.Name;
+					std::memset(m_EditProjectName, 0, sizeof(m_EditProjectName));
+					std::memset(m_EditProjectDescription, 0, sizeof(m_EditProjectDescription));
+					std::snprintf(m_EditProjectName, sizeof(m_EditProjectName), "%s", project.Name.c_str());
+					std::snprintf(m_EditProjectDescription, sizeof(m_EditProjectDescription), "%s", project.Description.c_str());
+					m_OpenEditProject = true;
+				}
+				ImGui::PopStyleColor();
+
+				ImGui::PushStyleColor(ImGuiCol_Text, redColor);
+				if (ImGui::Selectable(ICON_FA_TRASH "  Delete", false, canManage ? 0 : ImGuiSelectableFlags_Disabled, ImVec2(140.0f, 0.0f)))
+				{
+					m_ActionProjectId = project.Id;
+					m_ActionProjectName = project.Name;
+					m_OpenDeleteProject = true;
+				}
+				ImGui::PopStyleColor();
+
+				if (!canManage)
+				{
+					ImGui::PushStyleColor(ImGuiCol_Text, grayText);
+					ImGui::SetWindowFontScale(0.75f);
+					ImGui::TextUnformatted("Leader only");
+					ImGui::SetWindowFontScale(1.0f);
+					ImGui::PopStyleColor();
+				}
+
+				ImGui::EndPopup();
+			}
+
+			ImGui::PopStyleVar(3);
+			ImGui::PopStyleColor(5);
 
 			// Optional project code under name
 			ImGui::SetCursorPos(ImVec2(20.0f, 42.0f));
@@ -432,5 +498,207 @@ void DashboardLayer::OnRenderContent()
 	}
 
 	ImGui::PopStyleVar(3);
+	ImGui::PopStyleColor(2);
+
+	// Deferred modals (stable ID stack outside per-card child/popup).
+	RenderEditProjectModal();
+	RenderDeleteProjectModal();
+}
+
+void DashboardLayer::RenderEditProjectModal()
+{
+	if (m_OpenEditProject)
+	{
+		ImGui::OpenPopup("Edit Project");
+		m_OpenEditProject = false;
+	}
+
+	const ImVec4 whiteText = ImVec4(226.0f / 255.0f, 226.0f / 255.0f, 226.0f / 255.0f, 1.0f);
+	const ImVec4 grayText = ImVec4(187.0f / 255.0f, 201.0f / 255.0f, 202.0f / 255.0f, 1.0f);
+	const ImVec4 cyanColor = ImVec4(0.0f, 173.0f / 255.0f, 181.0f / 255.0f, 1.0f);
+	const ImVec4 boxBgColor = ImVec4(26.0f / 255.0f, 28.0f / 255.0f, 28.0f / 255.0f, 1.0f);
+	const ImVec4 borderColor = ImVec4(60.0f / 255.0f, 73.0f / 255.0f, 74.0f / 255.0f, 1.0f);
+
+	const ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+	ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+	ImGui::PushStyleColor(ImGuiCol_PopupBg, boxBgColor);
+	ImGui::PushStyleColor(ImGuiCol_Border, borderColor);
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 6.0f);
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(24.0f, 24.0f));
+
+	if (ImGui::BeginPopupModal("Edit Project", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar))
+	{
+		ImGui::PushStyleColor(ImGuiCol_Text, whiteText);
+		ImGui::SetWindowFontScale(1.2f);
+		ImGui::Text(ICON_FA_PEN " Edit Project");
+		ImGui::SetWindowFontScale(1.0f);
+		ImGui::PopStyleColor();
+
+		ImGui::Dummy(ImVec2(0.0f, 15.0f));
+
+		ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(15.0f / 255.0f, 16.0f / 255.0f, 16.0f / 255.0f, 1.0f));
+		ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(35.0f / 255.0f, 38.0f / 255.0f, 38.0f / 255.0f, 1.0f));
+		ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(45.0f / 255.0f, 48.0f / 255.0f, 48.0f / 255.0f, 1.0f));
+		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
+		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10.0f, 10.0f));
+
+		ImGui::PushStyleColor(ImGuiCol_Text, grayText);
+		ImGui::Text("PROJECT NAME");
+		ImGui::PopStyleColor();
+
+		ImGui::PushStyleColor(ImGuiCol_Text, whiteText);
+		ImGui::SetNextItemWidth(350.0f);
+		if (ImGui::IsWindowAppearing())
+			ImGui::SetKeyboardFocusHere();
+		ImGui::InputText("##EditProjectName", m_EditProjectName, IM_ARRAYSIZE(m_EditProjectName));
+		ImGui::PopStyleColor();
+
+		ImGui::Dummy(ImVec2(0.0f, 10.0f));
+
+		ImGui::PushStyleColor(ImGuiCol_Text, grayText);
+		ImGui::Text("DESCRIPTION (OPTIONAL)");
+		ImGui::PopStyleColor();
+
+		ImGui::PushStyleColor(ImGuiCol_Text, whiteText);
+		ImGui::InputTextMultiline("##EditProjectDesc", m_EditProjectDescription, IM_ARRAYSIZE(m_EditProjectDescription), ImVec2(350.0f, 100.0f));
+		ImGui::PopStyleColor();
+
+		ImGui::PopStyleVar(2);
+		ImGui::PopStyleColor(3);
+
+		ImGui::Dummy(ImVec2(0.0f, 20.0f));
+
+		const float modalBtnWidth = (350.0f - 10.0f) / 2.0f;
+
+		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+		ImGui::PushStyleColor(ImGuiCol_Border, borderColor);
+		ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
+		ImGui::PushStyleColor(ImGuiCol_Text, whiteText);
+		if (ImGui::Button("Cancel", ImVec2(modalBtnWidth, 36.0f)))
+		{
+			ImGui::CloseCurrentPopup();
+		}
+		ImGui::PopStyleColor(3);
+		ImGui::PopStyleVar(2);
+
+		ImGui::SameLine(0, 10.0f);
+
+		ImGui::PushStyleColor(ImGuiCol_Button, cyanColor);
+		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.0f, 193.0f / 255.0f, 201.0f / 255.0f, 1.0f));
+		ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.0f, 153.0f / 255.0f, 161.0f / 255.0f, 1.0f));
+		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
+		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(18.0f / 255.0f, 20.0f / 255.0f, 20.0f / 255.0f, 1.0f));
+		if (ImGui::Button("Save", ImVec2(modalBtnWidth, 36.0f)))
+		{
+			std::string message;
+			if (TrackingTool::ProjectService::UpdateProject(m_ActionProjectId, m_EditProjectName, m_EditProjectDescription, message))
+			{
+				TrackingTool::Application::Get().PushNotification(message, NotificationType::Info);
+				RefreshProjects(false);
+				ImGui::CloseCurrentPopup();
+			}
+			else
+			{
+				TrackingTool::Application::Get().PushNotification(message, NotificationType::Error);
+			}
+		}
+		ImGui::SetItemDefaultFocus();
+		ImGui::PopStyleColor(4);
+		ImGui::PopStyleVar();
+
+		ImGui::EndPopup();
+	}
+
+	ImGui::PopStyleVar(2);
+	ImGui::PopStyleColor(2);
+}
+
+void DashboardLayer::RenderDeleteProjectModal()
+{
+	if (m_OpenDeleteProject)
+	{
+		ImGui::OpenPopup("Delete Project");
+		m_OpenDeleteProject = false;
+	}
+
+	const ImVec4 whiteText = ImVec4(226.0f / 255.0f, 226.0f / 255.0f, 226.0f / 255.0f, 1.0f);
+	const ImVec4 grayText = ImVec4(187.0f / 255.0f, 201.0f / 255.0f, 202.0f / 255.0f, 1.0f);
+	const ImVec4 redColor = ImVec4(238.0f / 255.0f, 56.0f / 255.0f, 56.0f / 255.0f, 1.0f);
+	const ImVec4 boxBgColor = ImVec4(26.0f / 255.0f, 28.0f / 255.0f, 28.0f / 255.0f, 1.0f);
+	const ImVec4 borderColor = ImVec4(60.0f / 255.0f, 73.0f / 255.0f, 74.0f / 255.0f, 1.0f);
+
+	const ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+	ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+	ImGui::PushStyleColor(ImGuiCol_PopupBg, boxBgColor);
+	ImGui::PushStyleColor(ImGuiCol_Border, borderColor);
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 6.0f);
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(24.0f, 24.0f));
+
+	if (ImGui::BeginPopupModal("Delete Project", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar))
+	{
+		ImGui::PushStyleColor(ImGuiCol_Text, whiteText);
+		ImGui::SetWindowFontScale(1.2f);
+		ImGui::Text(ICON_FA_TRASH " Delete Project");
+		ImGui::SetWindowFontScale(1.0f);
+		ImGui::PopStyleColor();
+
+		ImGui::Dummy(ImVec2(0.0f, 8.0f));
+
+		ImGui::PushStyleColor(ImGuiCol_Text, grayText);
+		ImGui::PushTextWrapPos(ImGui::GetCursorPos().x + 350.0f);
+		ImGui::TextWrapped("Are you sure you want to permanently delete \"%s\"? This removes the project and all memberships. This action cannot be undone.",
+			m_ActionProjectName.c_str());
+		ImGui::PopTextWrapPos();
+		ImGui::PopStyleColor();
+
+		ImGui::Dummy(ImVec2(0.0f, 20.0f));
+
+		const float modalBtnWidth = (350.0f - 10.0f) / 2.0f;
+
+		// Cancel (default focus for destructive action)
+		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+		ImGui::PushStyleColor(ImGuiCol_Border, borderColor);
+		ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
+		ImGui::PushStyleColor(ImGuiCol_Text, whiteText);
+		if (ImGui::Button("Cancel", ImVec2(modalBtnWidth, 36.0f)))
+		{
+			ImGui::CloseCurrentPopup();
+		}
+		ImGui::SetItemDefaultFocus();
+		ImGui::PopStyleColor(3);
+		ImGui::PopStyleVar(2);
+
+		ImGui::SameLine(0, 10.0f);
+
+		ImGui::PushStyleColor(ImGuiCol_Button, redColor);
+		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(255.0f / 255.0f, 76.0f / 255.0f, 76.0f / 255.0f, 1.0f));
+		ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(200.0f / 255.0f, 40.0f / 255.0f, 40.0f / 255.0f, 1.0f));
+		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
+		ImGui::PushStyleColor(ImGuiCol_Text, whiteText);
+		if (ImGui::Button("Delete", ImVec2(modalBtnWidth, 36.0f)))
+		{
+			std::string message;
+			if (TrackingTool::ProjectService::DeleteProject(m_ActionProjectId, message))
+			{
+				TrackingTool::Application::Get().PushNotification(message, NotificationType::Info);
+				RefreshProjects(false);
+				ImGui::CloseCurrentPopup();
+			}
+			else
+			{
+				TrackingTool::Application::Get().PushNotification(message, NotificationType::Error);
+			}
+		}
+		ImGui::PopStyleColor(4);
+		ImGui::PopStyleVar();
+
+		ImGui::EndPopup();
+	}
+
+	ImGui::PopStyleVar(2);
 	ImGui::PopStyleColor(2);
 }

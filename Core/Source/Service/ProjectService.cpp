@@ -180,4 +180,91 @@ namespace TrackingTool
 		return true;
 	}
 
+	bool ProjectService::UpdateProject(int projectId, const std::string& name,
+		const std::string& description, std::string& outMessage)
+	{
+		outMessage.clear();
+
+		if (name.empty())
+		{
+			outMessage = "Project name is required.";
+			return false;
+		}
+
+		if (!AuthService::IsLoggedIn())
+		{
+			outMessage = "You must be logged in to edit a project.";
+			Log::Error("ProjectService::UpdateProject: no user is currently logged in.");
+			return false;
+		}
+
+		const std::string userName = AuthService::GetLoggedInUser();
+		const UpdateProjectResult result = Database::UpdateProject(projectId, name, description, userName);
+
+		switch (result)
+		{
+		case UpdateProjectResult::Success:
+			InvalidateProjectsCache();
+			outMessage = "Project updated successfully.";
+			return true;
+
+		case UpdateProjectResult::ProjectNotFound:
+			outMessage = "Project not found.";
+			return false;
+
+		case UpdateProjectResult::Forbidden:
+			outMessage = "Only the project leader can edit this project.";
+			return false;
+
+		case UpdateProjectResult::UserNotFound:
+			outMessage = "Logged-in user was not found in the database.";
+			return false;
+
+		case UpdateProjectResult::Error:
+		default:
+			outMessage = "Failed to update project due to a database error.";
+			return false;
+		}
+	}
+
+	bool ProjectService::DeleteProject(int projectId, std::string& outMessage)
+	{
+		outMessage.clear();
+
+		if (!AuthService::IsLoggedIn())
+		{
+			outMessage = "You must be logged in to delete a project.";
+			Log::Error("ProjectService::DeleteProject: no user is currently logged in.");
+			return false;
+		}
+
+		const std::string userName = AuthService::GetLoggedInUser();
+		const DeleteProjectResult result = Database::DeleteProject(projectId, userName);
+
+		switch (result)
+		{
+		case DeleteProjectResult::Success:
+			InvalidateProjectsCache();
+			outMessage = "Project deleted successfully.";
+			return true;
+
+		case DeleteProjectResult::ProjectNotFound:
+			outMessage = "Project not found.";
+			return false;
+
+		case DeleteProjectResult::Forbidden:
+			outMessage = "Only the project leader can delete this project.";
+			return false;
+
+		case DeleteProjectResult::UserNotFound:
+			outMessage = "Logged-in user was not found in the database.";
+			return false;
+
+		case DeleteProjectResult::Error:
+		default:
+			outMessage = "Failed to delete project due to a database error.";
+			return false;
+		}
+	}
+
 }

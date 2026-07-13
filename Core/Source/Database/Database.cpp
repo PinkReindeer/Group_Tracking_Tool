@@ -1,5 +1,6 @@
 #include "Database.h"
 
+#include <cctype>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -349,6 +350,152 @@ namespace TrackingTool
             Log::Error("DB_GetProjectsForUser: {}", e.what());
             outProjects.clear();
             return false;
+        }
+    }
+
+    namespace
+    {
+        // Returns empty optional-like pair: first = found user, second = role (empty if not a member).
+        // Uses the open transaction. On DB failure throws.
+        bool ResolveUserAndRole(pqxx::work& txn, int projectId, const std::string& userName,
+            std::string& outUserId, std::string& outRole, bool& outProjectExists)
+        {
+            outUserId.clear();
+            outRole.clear();
+            outProjectExists = false;
+
+            pqxx::result userRes = txn.exec_params("SELECT userid FROM users WHERE username = $1", userName);
+            if (userRes.empty())
+                return false;
+            outUserId = userRes[0][0].as<std::string>();
+
+            pqxx::result projectRes = txn.exec_params("SELECT 1 FROM project WHERE projectid = $1", projectId);
+            outProjectExists = !projectRes.empty();
+            if (!outProjectExists)
+                return true;
+
+            pqxx::result roleRes = txn.exec_params(
+                "SELECT role FROM projectmember WHERE projectid = $1 AND userid = $2",
+                projectId, outUserId);
+            if (!roleRes.empty())
+                outRole = roleRes[0][0].as<std::string>();
+            return true;
+        }
+
+        bool IsLeaderRoleString(const std::string& role)
+        {
+            static constexpr char kLeader[] = "leader";
+            if (role.size() != sizeof(kLeader) - 1)
+                return false;
+            for (size_t i = 0; i < role.size(); ++i)
+            {
+                const char c = static_cast<char>(std::tolower(static_cast<unsigned char>(role[i])));
+                if (c != kLeader[i])
+                    return false;
+            }
+            return true;
+        }
+    }
+
+    UpdateProjectResult Database::UpdateProject(int projectId, const std::string& projectName,
+        const std::string& description, const std::string& userName)
+    {
+        if (!s_Connection || !s_Connection->is_open())
+        {
+            Log::Error("DB_UpdateProject: Database is not connected!");
+            return UpdateProjectResult::Error;
+        }
+
+        try
+        {
+            pqxx::work txn(*s_Connection);
+
+            std::string userId;
+            std::string role;
+            bool projectExists = false;
+            if (!ResolveUserAndRole(txn, projectId, userName, userId, role, projectExists))
+            {
+                Log::Error("DB_UpdateProject: user '{}' not found.", userName);
+                return UpdateProjectResult::UserNotFound;
+            }
+            if (!projectExists)
+            {
+                Log::Warn("DB_UpdateProject: project id {} not found.", projectId);
+                return UpdateProjectResult::ProjectNotFound;
+            }
+            if (!IsLeaderRoleString(role))
+            {
+                Log::Warn("DB_UpdateProject: user '{}' is not leader of project {}.", userName, projectId);
+                return UpdateProjectResult::Forbidden;
+            }
+
+            if (description.empty())
+            {
+                txn.exec_params(
+                    "UPDATE project SET projectname = $1, projectdescription = NULL WHERE projectid = $2",
+                    projectName, projectId);
+            }
+            else
+            {
+                txn.exec_params(
+                    "UPDATE project SET projectname = $1, projectdescription = $2 WHERE projectid = $3",
+                    projectName, description, projectId);
+            }
+
+            txn.commit();
+            Log::Info("DB_UpdateProject: project {} updated by '{}'", projectId, userName);
+            return UpdateProjectResult::Success;
+        }
+        catch (const std::exception& e)
+        {
+            Log::Error("DB_UpdateProject: {}", e.what());
+            return UpdateProjectResult::Error;
+        }
+    }
+
+    DeleteProjectResult Database::DeleteProject(int projectId, const std::string& userName)
+    {
+        if (!s_Connection || !s_Connection->is_open())
+        {
+            Log::Error("DB_DeleteProject: Database is not connected!");
+            return DeleteProjectResult::Error;
+        }
+
+        try
+        {
+            pqxx::work txn(*s_Connection);
+
+            std::string userId;
+            std::string role;
+            bool projectExists = false;
+            if (!ResolveUserAndRole(txn, projectId, userName, userId, role, projectExists))
+            {
+                Log::Error("DB_DeleteProject: user '{}' not found.", userName);
+                return DeleteProjectResult::UserNotFound;
+            }
+            if (!projectExists)
+            {
+                Log::Warn("DB_DeleteProject: project id {} not found.", projectId);
+                return DeleteProjectResult::ProjectNotFound;
+            }
+            if (!IsLeaderRoleString(role))
+            {
+                Log::Warn("DB_DeleteProject: user '{}' is not leader of project {}.", userName, projectId);
+                return DeleteProjectResult::Forbidden;
+            }
+
+            // Remove memberships first in case FKs are not ON DELETE CASCADE.
+            txn.exec_params("DELETE FROM projectmember WHERE projectid = $1", projectId);
+            txn.exec_params("DELETE FROM project WHERE projectid = $1", projectId);
+
+            txn.commit();
+            Log::Info("DB_DeleteProject: project {} deleted by '{}'", projectId, userName);
+            return DeleteProjectResult::Success;
+        }
+        catch (const std::exception& e)
+        {
+            Log::Error("DB_DeleteProject: {}", e.what());
+            return DeleteProjectResult::Error;
         }
     }
 

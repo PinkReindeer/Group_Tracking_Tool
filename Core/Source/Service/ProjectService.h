@@ -24,6 +24,12 @@ namespace TrackingTool
 		// Returns false if not logged in or a database error occurred.
 		static bool GetUserProjects(std::vector<ProjectInfo>& outProjects, std::string& outMessage, bool forceRefresh = false);
 
+		// Updates name/description for a project the logged-in user leads.
+		static bool UpdateProject(int projectId, const std::string& name, const std::string& description, std::string& outMessage);
+
+		// Permanently deletes a project the logged-in user leads (and its memberships).
+		static bool DeleteProject(int projectId, std::string& outMessage);
+
 		// Drops the in-memory projects list. Call on logout or after mutations that
 		// are not followed by an immediate force-refresh.
 		static void InvalidateProjectsCache();
