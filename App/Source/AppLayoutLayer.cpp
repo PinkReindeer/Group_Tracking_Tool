@@ -6,6 +6,9 @@
 #include "AppLayoutLayer.h"
 #include "Service/AuthService.h"
 
+#include "Dashboard/DashboardLayer.h"
+#include "Project/ProjectLayer.h"
+
 void AppLayoutLayer::OnRender()
 {
 	glClearColor(18.0f / 255.0f, 20.0f / 255.0f, 20.0f / 255.0f, 1.0f); // #121414
@@ -84,30 +87,65 @@ void AppLayoutLayer::RenderSideNavBar()
 
 		// Menu Items
 		float menuItemHeight = 40.0f;
+		const char* activeMenu = GetActiveSidebarMenu();
 		
-		// 1. Dashboard (Active)
+		// 1. Dashboard
 		ImVec2 cursorPos = ImGui::GetCursorPos();
 		ImVec2 itemPMin = ImVec2(pMin.x, pMin.y + cursorPos.y);
 		ImVec2 itemPMax = ImVec2(pMin.x + sidebarWidth - 2.0f, itemPMin.y + menuItemHeight);
 		
-		// Draw active background
-		drawList->AddRectFilled(itemPMin, itemPMax, IM_COL32(18, 20, 20, 255)); // #121414
-		// Draw active left border accent
-		drawList->AddRectFilled(itemPMin, ImVec2(itemPMin.x + 4.0f, itemPMax.y), IM_COL32(0, 173, 181, 255)); // #00ADB5
+		bool isDashboardActive = (strcmp(activeMenu, "Dashboard") == 0);
+		if (isDashboardActive)
+		{
+			drawList->AddRectFilled(itemPMin, itemPMax, IM_COL32(18, 20, 20, 255)); // #121414
+			drawList->AddRectFilled(itemPMin, ImVec2(itemPMin.x + 4.0f, itemPMax.y), IM_COL32(0, 173, 181, 255)); // #00ADB5
+		}
 		
 		ImGui::SetCursorPos(ImVec2(30.0f, cursorPos.y + (menuItemHeight - ImGui::GetTextLineHeight()) * 0.5f));
-		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 173.0f / 255.0f, 181.0f / 255.0f, 1.0f));
+		if (isDashboardActive)
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 173.0f / 255.0f, 181.0f / 255.0f, 1.0f));
+		else
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(187.0f / 255.0f, 201.0f / 255.0f, 202.0f / 255.0f, 1.0f));
+			
 		ImGui::Text(ICON_FA_TABLE_CELLS_LARGE "   Dashboard");
 		ImGui::PopStyleColor();
+
+		ImGui::SetCursorPos(cursorPos);
+		if (ImGui::InvisibleButton("##BtnDashboard", ImVec2(sidebarWidth, menuItemHeight)))
+		{
+			if (!isDashboardActive) TransitionTo<DashboardLayer>();
+		}
+		if (ImGui::IsItemHovered()) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
 
 		ImGui::SetCursorPosY(cursorPos.y + menuItemHeight);
 
 		// 2. Project
 		cursorPos = ImGui::GetCursorPos();
+		itemPMin = ImVec2(pMin.x, pMin.y + cursorPos.y);
+		itemPMax = ImVec2(pMin.x + sidebarWidth - 2.0f, itemPMin.y + menuItemHeight);
+
+		bool isProjectActive = (strcmp(activeMenu, "Project") == 0);
+		if (isProjectActive)
+		{
+			drawList->AddRectFilled(itemPMin, itemPMax, IM_COL32(18, 20, 20, 255)); // #121414
+			drawList->AddRectFilled(itemPMin, ImVec2(itemPMin.x + 4.0f, itemPMax.y), IM_COL32(0, 173, 181, 255)); // #00ADB5
+		}
+
 		ImGui::SetCursorPos(ImVec2(30.0f, cursorPos.y + (menuItemHeight - ImGui::GetTextLineHeight()) * 0.5f));
-		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(187.0f / 255.0f, 201.0f / 255.0f, 202.0f / 255.0f, 1.0f)); // #BBC9CA
+		if (isProjectActive)
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 173.0f / 255.0f, 181.0f / 255.0f, 1.0f));
+		else
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(187.0f / 255.0f, 201.0f / 255.0f, 202.0f / 255.0f, 1.0f));
+		
 		ImGui::Text(ICON_FA_FOLDER "   Project");
 		ImGui::PopStyleColor();
+
+		ImGui::SetCursorPos(cursorPos);
+		if (ImGui::InvisibleButton("##BtnProject", ImVec2(sidebarWidth, menuItemHeight)))
+		{
+			if (!isProjectActive) TransitionTo<ProjectLayer>();
+		}
+		if (ImGui::IsItemHovered()) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
 
 		ImGui::SetCursorPosY(cursorPos.y + menuItemHeight);
 
@@ -117,6 +155,11 @@ void AppLayoutLayer::RenderSideNavBar()
 		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(187.0f / 255.0f, 201.0f / 255.0f, 202.0f / 255.0f, 1.0f));
 		ImGui::Text(ICON_FA_CIRCLE_QUESTION "   Help");
 		ImGui::PopStyleColor();
+		
+		// Add invisible button for Help too just for hover effect
+		ImGui::SetCursorPos(ImVec2(0.0f, childSize.y - 40.0f - ImGui::GetTextLineHeight() - 10.0f));
+		if (ImGui::InvisibleButton("##BtnHelp", ImVec2(sidebarWidth, menuItemHeight))) {}
+		if (ImGui::IsItemHovered()) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
 	}
 	ImGui::EndChild();
 	
@@ -144,7 +187,7 @@ void AppLayoutLayer::RenderTopNavBar()
 		ImGui::SetCursorPos(ImVec2(30.0f, centerY));
 		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 173.0f / 255.0f, 181.0f / 255.0f, 1.0f)); // #00ADB5
 		ImGui::SetWindowFontScale(1.2f);
-		ImGui::Text("Personal Dashboard");
+		ImGui::Text("%s", GetTopNavBarTitle());
 		ImGui::SetWindowFontScale(1.0f);
 		ImGui::PopStyleColor();
 

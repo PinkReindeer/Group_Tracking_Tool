@@ -18,6 +18,9 @@ public:
 protected:
 	virtual void OnRenderContent() override;
 
+	virtual const char* GetActiveSidebarMenu() const override { return "Dashboard"; }
+	virtual const char* GetTopNavBarTitle() const override { return "Personal Dashboard"; }
+
 private:
 	void RefreshProjects(bool showNotification = false);
 
