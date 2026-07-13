@@ -6,5 +6,5 @@ public:
 	TasksView() = default;
 	~TasksView() = default;
 
-	void OnRender();
+	void OnRender(const char* projectName);
 };

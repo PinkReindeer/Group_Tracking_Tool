@@ -3,6 +3,7 @@
 #include <glad/gl.h>
 
 #include "AppLayoutLayer.h"
+#include "Database/Database.h"
 #include "Views/TasksView.h"
 #include "Views/MilestonesView.h"
 #include "Views/ChartView.h"
@@ -14,7 +15,7 @@ enum class ProjectTab { Tasks, Milestones, Chart, Workload, Member};
 class ProjectLayer : public AppLayoutLayer
 {
 public:
-	ProjectLayer() = default;
+	ProjectLayer();
 	virtual ~ProjectLayer() = default;
 
 	virtual void OnUpdate(float ts) override;
@@ -28,6 +29,8 @@ protected:
 
 private:
 	ProjectTab m_ActiveTab = ProjectTab::Tasks;
+	TrackingTool::ProjectInfo m_Project;
+	bool m_HasProject = false;
 
 	TasksView m_TasksView;
 	MilestonesView m_MilestonesView;

@@ -2,7 +2,7 @@
 #include "imgui.h"
 #include "IconsFontAwesome6.h"
 
-void MemberView::OnRender()
+void MemberView::OnRender(const char* projectName)
 {
 	ImDrawList* drawList = ImGui::GetWindowDrawList();
 	float totalWidth = ImGui::GetContentRegionAvail().x;
@@ -14,14 +14,16 @@ void MemberView::OnRender()
 	ImVec4 borderColor = ImVec4(60.0f / 255.0f, 73.0f / 255.0f, 74.0f / 255.0f, 1.0f); // #3C494A
 	ImVec4 redColor = ImVec4(255.0f / 255.0f, 11.0f / 255.0f, 11.0f / 255.0f, 1.0f); // #FF0B0B
 
+	const char* displayName = (projectName && projectName[0] != '\0') ? projectName : "Project";
+
 	// --- Header Section ---
 	ImGui::PushStyleColor(ImGuiCol_Text, whiteText);
 	ImGui::SetWindowFontScale(1.1f);
-	ImGui::Text("Group Tracking Tool");
+	ImGui::Text("%s", displayName);
 	ImGui::SetWindowFontScale(1.0f);
 	ImGui::PopStyleColor();
 
-	ImGui::SameLine(220.0f);
+	ImGui::SameLine(0.0f, 24.0f);
 
 	// Date Range
 	ImGui::PushStyleColor(ImGuiCol_Text, grayText);

@@ -71,8 +71,9 @@ namespace TrackingTool
 		{
 			if (BCrypt::validatePassword(password, hashedPassword))
 			{
-				// Drop any previous session's project list before switching users.
+				// Drop any previous session's project list / selection before switching users.
 				ProjectService::InvalidateProjectsCache();
+				ProjectService::ClearActiveProject();
 				s_LoggedInUser = userName;
 				outMessage = "Login successful.";
 				return true;
@@ -93,6 +94,7 @@ namespace TrackingTool
 	void AuthService::Logout()
 	{
 		ProjectService::InvalidateProjectsCache();
+		ProjectService::ClearActiveProject();
 		s_LoggedInUser.clear();
 	}
 

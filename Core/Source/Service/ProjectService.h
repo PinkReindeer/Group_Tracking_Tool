@@ -34,9 +34,18 @@ namespace TrackingTool
 		// are not followed by an immediate force-refresh.
 		static void InvalidateProjectsCache();
 
+		// Session-selected project (e.g. opened from the dashboard grid).
+		static void SetActiveProject(const ProjectInfo& project);
+		static void ClearActiveProject();
+		// Returns true and fills outProject when a project is selected for this session.
+		static bool GetActiveProject(ProjectInfo& outProject);
+		static bool HasActiveProject();
+
 	private:
 		static std::vector<ProjectInfo> s_CachedProjects;
 		static bool s_HasCache;
+		static ProjectInfo s_ActiveProject;
+		static bool s_HasActiveProject;
 	};
 
 }

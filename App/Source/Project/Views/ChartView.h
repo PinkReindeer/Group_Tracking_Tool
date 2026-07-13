@@ -6,5 +6,5 @@ public:
 	ChartView() = default;
 	~ChartView() = default;
 
-	void OnRender();
+	void OnRender(const char* projectName);
 };

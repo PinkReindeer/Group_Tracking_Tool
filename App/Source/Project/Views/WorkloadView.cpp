@@ -4,7 +4,7 @@
 #include "imgui.h"
 #include "IconsFontAwesome6.h"
 
-void WorkloadView::OnRender()
+void WorkloadView::OnRender(const char* projectName)
 {
 	ImDrawList* drawList = ImGui::GetWindowDrawList();
 	float totalWidth = ImGui::GetContentRegionAvail().x;
@@ -17,14 +17,16 @@ void WorkloadView::OnRender()
 	ImVec4 darkBg = ImVec4(26.0f / 255.0f, 28.0f / 255.0f, 28.0f / 255.0f, 1.0f); // #1A1C1C
 	ImVec4 cardBorderColor = ImVec4(56.0f / 255.0f, 57.0f / 255.0f, 58.0f / 255.0f, 1.0f); // #38393A
 
+	const char* displayName = (projectName && projectName[0] != '\0') ? projectName : "Project";
+
 	// --- Header Section ---
 	ImGui::PushStyleColor(ImGuiCol_Text, whiteText);
 	ImGui::SetWindowFontScale(1.1f);
-	ImGui::Text("Group Tracking Tool");
+	ImGui::Text("%s", displayName);
 	ImGui::SetWindowFontScale(1.0f);
 	ImGui::PopStyleColor();
 
-	ImGui::SameLine(220.0f);
+	ImGui::SameLine(0.0f, 24.0f);
 
 	// Date Range
 	ImGui::PushStyleColor(ImGuiCol_Text, grayText);

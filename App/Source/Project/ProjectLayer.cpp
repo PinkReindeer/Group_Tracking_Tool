@@ -3,6 +3,14 @@
 
 #include "ProjectLayer.h"
 
+#include "Service/ProjectService.h"
+
+ProjectLayer::ProjectLayer()
+{
+	// Prefer the project the user opened from the dashboard grid.
+	m_HasProject = TrackingTool::ProjectService::GetActiveProject(m_Project);
+}
+
 void ProjectLayer::OnUpdate(float ts)
 {
 }
@@ -60,36 +68,42 @@ void ProjectLayer::OnRenderTopNavBarExtensions()
 	DrawTab("Workload", ProjectTab::Workload);
 	DrawTab("Member", ProjectTab::Member);
 
-	// Render Invite Code Badge right-aligned before the gear icon
-	// Get available width. In AppLayoutLayer, the bell/gear takes some space.
-	// Let's place it using absolute position relative to the right edge.
-	// Alex Rivera (approx 80px) + Gear (20px) + Bell (20px) + padding = approx 200px from right.
-	const char* inviteCode = "1H4XDD";
-	ImVec2 inviteSize = ImGui::CalcTextSize(inviteCode);
-	float inviteTotalWidth = inviteSize.x + 40.0f; // Padding + icon
-	float rightOffset = 220.0f; // Before the bell icon which is around 170px from right
+	// Invite code badge (active project) — right-aligned before bell/gear.
+	if (m_HasProject && !m_Project.Code.empty())
+	{
+		const char* inviteCode = m_Project.Code.c_str();
+		ImVec2 inviteSize = ImGui::CalcTextSize(inviteCode);
+		float inviteTotalWidth = inviteSize.x + 40.0f; // Padding + icon
+		float rightOffset = 220.0f; // Before the bell icon which is around 170px from right
 
-	ImVec2 badgePos = ImVec2(pMin.x + childSize.x - rightOffset - inviteTotalWidth, pMin.y + (topbarHeight - 24.0f) * 0.5f);
-	
-	// Badge background
-	drawList->AddRectFilled(badgePos, ImVec2(badgePos.x + inviteTotalWidth, badgePos.y + 24.0f), IM_COL32(51, 53, 53, 255), 4.0f);
-	
-	// Badge text
-	drawList->AddText(ImGui::GetFont(), ImGui::GetFontSize(), ImVec2(badgePos.x + 10.0f, badgePos.y + 4.0f), IM_COL32(187, 201, 202, 255), inviteCode);
-	
-	// Copy Icon
-	drawList->AddText(ImGui::GetFont(), ImGui::GetFontSize(), ImVec2(badgePos.x + inviteSize.x + 20.0f, badgePos.y + 4.0f), IM_COL32(187, 201, 202, 255), ICON_FA_COPY);
+		ImVec2 badgePos = ImVec2(pMin.x + childSize.x - rightOffset - inviteTotalWidth, pMin.y + (topbarHeight - 24.0f) * 0.5f);
+
+		drawList->AddRectFilled(badgePos, ImVec2(badgePos.x + inviteTotalWidth, badgePos.y + 24.0f), IM_COL32(51, 53, 53, 255), 4.0f);
+		drawList->AddText(ImGui::GetFont(), ImGui::GetFontSize(), ImVec2(badgePos.x + 10.0f, badgePos.y + 4.0f), IM_COL32(187, 201, 202, 255), inviteCode);
+		drawList->AddText(ImGui::GetFont(), ImGui::GetFontSize(), ImVec2(badgePos.x + inviteSize.x + 20.0f, badgePos.y + 4.0f), IM_COL32(187, 201, 202, 255), ICON_FA_COPY);
+	}
 }
 
 void ProjectLayer::OnRenderContent()
 {
+	if (!m_HasProject)
+	{
+		const ImVec4 grayText = ImVec4(187.0f / 255.0f, 201.0f / 255.0f, 202.0f / 255.0f, 1.0f);
+		ImGui::PushStyleColor(ImGuiCol_Text, grayText);
+		ImGui::TextUnformatted("Select a project from the Dashboard to open it here.");
+		ImGui::PopStyleColor();
+		return;
+	}
+
+	const char* projectName = m_Project.Name.c_str();
+
 	// Render the content for the currently active tab
 	switch (m_ActiveTab)
 	{
-		case ProjectTab::Tasks: m_TasksView.OnRender(); break;
-		case ProjectTab::Milestones: m_MilestonesView.OnRender(); break;
-		case ProjectTab::Chart: m_ChartView.OnRender(); break;
-		case ProjectTab::Workload: m_WorkloadView.OnRender(); break;
-		case ProjectTab::Member: m_MemberView.OnRender(); break;
+		case ProjectTab::Tasks: m_TasksView.OnRender(projectName); break;
+		case ProjectTab::Milestones: m_MilestonesView.OnRender(projectName); break;
+		case ProjectTab::Chart: m_ChartView.OnRender(projectName); break;
+		case ProjectTab::Workload: m_WorkloadView.OnRender(projectName); break;
+		case ProjectTab::Member: m_MemberView.OnRender(projectName); break;
 	}
 }

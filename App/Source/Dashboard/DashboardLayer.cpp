@@ -4,6 +4,7 @@
 #include "DashboardLayer.h"
 
 #include "Platform/Application.h"
+#include "Project/ProjectLayer.h"
 #include "Service/ProjectService.h"
 
 #include <cctype>
@@ -382,7 +383,10 @@ void DashboardLayer::OnRenderContent()
 	for (size_t i = 0; i < m_Projects.size(); ++i)
 	{
 		const auto& project = m_Projects[i];
-		// Use stable integer ID — avoids heap-allocating a std::string every frame.
+		bool menuButtonHovered = false;
+		char menuPopupId[64];
+		std::snprintf(menuPopupId, sizeof(menuPopupId), "##ProjectActions%d", project.Id);
+
 		if (ImGui::BeginChild(static_cast<ImGuiID>(project.Id), ImVec2(300.0f, 150.0f), true, ImGuiWindowFlags_NoScrollbar))
 		{
 			ImGui::SetCursorPos(ImVec2(20.0f, 20.0f));
@@ -403,7 +407,7 @@ void DashboardLayer::OnRenderContent()
 			ImGui::GetWindowDrawList()->AddText(ImGui::GetFont(), ImGui::GetFontSize() * 0.7f, ImVec2(roleBadgePos.x + 8.0f, roleBadgePos.y + 2.0f),
 				ImGui::GetColorU32(cyanColor), roleLabel);
 
-			// 3-dots overflow menu (Edit / Delete)
+			// 3-dots overflow menu (Edit / Delete) — excluded from card navigation
 			ImGui::SetCursorPos(ImVec2(300.0f - 30.0f, 18.0f));
 			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
 			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0, 0, 0, 0));
@@ -413,12 +417,11 @@ void DashboardLayer::OnRenderContent()
 
 			char menuBtnId[64];
 			std::snprintf(menuBtnId, sizeof(menuBtnId), ICON_FA_ELLIPSIS_VERTICAL "##menu%d", project.Id);
-			char menuPopupId[64];
-			std::snprintf(menuPopupId, sizeof(menuPopupId), "##ProjectActions%d", project.Id);
 
 			if (ImGui::Button(menuBtnId))
 				ImGui::OpenPopup(menuPopupId);
-			if (ImGui::IsItemHovered())
+			menuButtonHovered = ImGui::IsItemHovered();
+			if (menuButtonHovered)
 				ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
 
 			ImGui::PopStyleVar();
@@ -490,6 +493,23 @@ void DashboardLayer::OnRenderContent()
 			ImGui::PopStyleColor();
 		}
 		ImGui::EndChild();
+
+		// Card click open that project (skip menu and its popup).
+		const bool cardHovered = ImGui::IsItemHovered();
+		if (cardHovered)
+		{
+			ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+			const ImVec2 cardMin = ImGui::GetItemRectMin();
+			const ImVec2 cardMax = ImGui::GetItemRectMax();
+			ImGui::GetWindowDrawList()->AddRect(cardMin, cardMax, ImGui::GetColorU32(cyanColor), 4.0f, 0, 1.5f);
+
+			if (!menuButtonHovered && !ImGui::IsPopupOpen(menuPopupId) &&
+				ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+			{
+				TrackingTool::ProjectService::SetActiveProject(project);
+				TransitionTo<ProjectLayer>();
+			}
+		}
 
 		float last_item_x2 = ImGui::GetItemRectMax().x;
 		float next_item_x2 = last_item_x2 + kProjectCardGapX + 300.0f;

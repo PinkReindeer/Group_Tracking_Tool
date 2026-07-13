@@ -6,5 +6,5 @@ public:
 	MemberView() = default;
 	~MemberView() = default;
 
-	void OnRender();
+	void OnRender(const char* projectName);
 };

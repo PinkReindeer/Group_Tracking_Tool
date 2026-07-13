@@ -30,11 +30,38 @@ namespace TrackingTool
 
 	std::vector<ProjectInfo> ProjectService::s_CachedProjects;
 	bool ProjectService::s_HasCache = false;
+	ProjectInfo ProjectService::s_ActiveProject;
+	bool ProjectService::s_HasActiveProject = false;
 
 	void ProjectService::InvalidateProjectsCache()
 	{
 		s_CachedProjects.clear();
 		s_HasCache = false;
+	}
+
+	void ProjectService::SetActiveProject(const ProjectInfo& project)
+	{
+		s_ActiveProject = project;
+		s_HasActiveProject = true;
+	}
+
+	void ProjectService::ClearActiveProject()
+	{
+		s_ActiveProject = ProjectInfo{};
+		s_HasActiveProject = false;
+	}
+
+	bool ProjectService::GetActiveProject(ProjectInfo& outProject)
+	{
+		if (!s_HasActiveProject)
+			return false;
+		outProject = s_ActiveProject;
+		return true;
+	}
+
+	bool ProjectService::HasActiveProject()
+	{
+		return s_HasActiveProject;
 	}
 
 	bool ProjectService::CreateProject(const std::string& name, const std::string& description,
@@ -205,6 +232,11 @@ namespace TrackingTool
 		{
 		case UpdateProjectResult::Success:
 			InvalidateProjectsCache();
+			if (s_HasActiveProject && s_ActiveProject.Id == projectId)
+			{
+				s_ActiveProject.Name = name;
+				s_ActiveProject.Description = description;
+			}
 			outMessage = "Project updated successfully.";
 			return true;
 
@@ -245,6 +277,8 @@ namespace TrackingTool
 		{
 		case DeleteProjectResult::Success:
 			InvalidateProjectsCache();
+			if (s_HasActiveProject && s_ActiveProject.Id == projectId)
+				ClearActiveProject();
 			outMessage = "Project deleted successfully.";
 			return true;
 

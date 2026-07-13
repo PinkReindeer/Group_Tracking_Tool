@@ -6,5 +6,5 @@ public:
 	WorkloadView() = default;
 	~WorkloadView() = default;
 
-	void OnRender();
+	void OnRender(const char* projectName);
 };
