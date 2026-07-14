@@ -301,4 +301,53 @@ namespace TrackingTool
 		}
 	}
 
+	bool ProjectService::RemoveMember(int projectId, const std::string& memberName, std::string& outMessage)
+	{
+		outMessage.clear();
+
+		if (!AuthService::IsLoggedIn())
+		{
+			outMessage = "You must be logged in to remove a member.";
+			Log::Error("ProjectService::RemoveMember: no user is currently logged in.");
+			return false;
+		}
+
+		const std::string actorUserName = AuthService::GetLoggedInUser();
+		const RemoveMemberResult result = Database::RemoveMember(projectId, memberName, actorUserName);
+
+		switch (result)
+		{
+		case RemoveMemberResult::Success:
+			// Removed member loses access; refresh project list if they were viewing it.
+			InvalidateProjectsCache();
+			outMessage = "Removed \"" + memberName + "\" from the project.";
+			return true;
+
+		case RemoveMemberResult::ProjectNotFound:
+			outMessage = "Project not found.";
+			return false;
+
+		case RemoveMemberResult::Forbidden:
+			outMessage = "Only the project leader can remove members.";
+			return false;
+
+		case RemoveMemberResult::CannotRemoveSelf:
+			outMessage = "You cannot remove yourself from the project.";
+			return false;
+
+		case RemoveMemberResult::MemberNotFound:
+			outMessage = "That user is not a member of this project.";
+			return false;
+
+		case RemoveMemberResult::UserNotFound:
+			outMessage = "Logged-in user was not found in the database.";
+			return false;
+
+		case RemoveMemberResult::Error:
+		default:
+			outMessage = "Failed to remove member due to a database error.";
+			return false;
+		}
+	}
+
 }

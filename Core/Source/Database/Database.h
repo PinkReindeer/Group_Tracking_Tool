@@ -41,6 +41,17 @@ namespace TrackingTool
         Error
     };
 
+    enum class RemoveMemberResult
+    {
+        Success,
+        ProjectNotFound,
+        Forbidden,       // actor is not a leader of the project
+        CannotRemoveSelf,// leader cannot remove themselves
+        MemberNotFound,  // target is not a member of the project
+        UserNotFound,    // actor username not found
+        Error
+    };
+
     struct ProjectInfo
     {
         int Id = 0;
@@ -49,6 +60,13 @@ namespace TrackingTool
         std::string Description;
         std::string CreatedDate;
         std::string Role; // e.g. "leader", "member"
+    };
+
+    struct MemberInfo
+    {
+        std::string Name;
+        std::string JoinDate;
+        std::string Role;
     };
 
     struct Database
@@ -72,12 +90,19 @@ namespace TrackingTool
         // Returns false on connection/query failure; true with outProjects possibly empty.
         static bool GetProjectsForUser(const std::string& userName, std::vector<ProjectInfo>& outProjects);
 
+        static bool GetProjectMembers(int projectId, std::vector<MemberInfo>& outMembers);
+
         // Updates name/description. Only succeeds if userName is a leader of the project.
         static UpdateProjectResult UpdateProject(int projectId, const std::string& projectName,
             const std::string& description, const std::string& userName);
 
         // Deletes the project and its memberships. Only succeeds if userName is a leader.
         static DeleteProjectResult DeleteProject(int projectId, const std::string& userName);
+
+        // Removes memberName from the project. Only succeeds if actorUserName is a leader,
+        // the target is a member, and the actor is not removing themselves.
+        static RemoveMemberResult RemoveMember(int projectId, const std::string& memberName,
+            const std::string& actorUserName);
     };
 
 }

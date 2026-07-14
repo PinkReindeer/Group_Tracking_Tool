@@ -30,6 +30,10 @@ namespace TrackingTool
 		// Permanently deletes a project the logged-in user leads (and its memberships).
 		static bool DeleteProject(int projectId, std::string& outMessage);
 
+		// Removes a member from a project. Only the project leader may do this,
+		// and the leader cannot remove themselves.
+		static bool RemoveMember(int projectId, const std::string& memberName, std::string& outMessage);
+
 		// Drops the in-memory projects list. Call on logout or after mutations that
 		// are not followed by an immediate force-refresh.
 		static void InvalidateProjectsCache();
