@@ -50,6 +50,17 @@ namespace TrackingTool
         Error
     };
 
+    enum class RemoveMemberResult
+    {
+        Success,
+        ProjectNotFound,
+        Forbidden,       // actor is not a leader of the project
+        CannotRemoveSelf,// leader cannot remove themselves
+        MemberNotFound,  // target is not a member of the project
+        UserNotFound,    // actor username not found
+        Error
+    };
+
     struct ProjectInfo
     {
         int Id = 0;
@@ -69,6 +80,13 @@ namespace TrackingTool
         std::string EndDate;   // MM-DD-YYYY
         float ProgressPercentage = 0.0f;
         std::string Status;    // "not started" | "in progress" | "completed"
+    };
+
+    struct MemberInfo
+    {
+        std::string Name;
+        std::string JoinDate;
+        std::string Role;
     };
 
     struct Database
@@ -92,6 +110,8 @@ namespace TrackingTool
         // Returns false on connection/query failure; true with outProjects possibly empty.
         static bool GetProjectsForUser(const std::string& userName, std::vector<ProjectInfo>& outProjects);
 
+        static bool GetProjectMembers(int projectId, std::vector<MemberInfo>& outMembers);
+
         // Updates name/description. Only succeeds if userName is a leader of the project.
         static UpdateProjectResult UpdateProject(int projectId, const std::string& projectName, const std::string& description, const std::string& userName);
 
@@ -106,6 +126,11 @@ namespace TrackingTool
         // All milestones for a project, ordered by start date then id.
         // Returns false on connection/query failure; true with outMilestones possibly empty.
         static bool GetMilestonesForProject(int projectId, std::vector<MilestoneInfo>& outMilestones);
+
+        // Removes memberName from the project. Only succeeds if actorUserName is a leader,
+        // the target is a member, and the actor is not removing themselves.
+        static RemoveMemberResult RemoveMember(int projectId, const std::string& memberName,
+            const std::string& actorUserName);
     };
 
 }

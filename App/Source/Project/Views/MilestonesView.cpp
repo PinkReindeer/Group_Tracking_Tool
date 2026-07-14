@@ -1,3 +1,4 @@
+#include "Database/Database.h"
 #include "MilestonesView.h"
 
 #include "imgui.h"
@@ -290,7 +291,7 @@ void MilestonesView::OnRender(const char* projectName, const char* createdDate, 
 		ImVec2 p = ImGui::GetCursorScreenPos();
 		drawList->AddLine(p, ImVec2(p.x + totalWidth, p.y), ImGui::GetColorU32(ImVec4(40.0f / 255.0f, 43.0f / 255.0f, 43.0f / 255.0f, 1.0f)), 1.0f);
 		ImGui::Dummy(ImVec2(0.0f, 8.0f));
-	};
+		};
 
 	DrawRowSeparator();
 
