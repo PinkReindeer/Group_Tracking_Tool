@@ -33,10 +33,38 @@ namespace TrackingTool
 	ProjectInfo ProjectService::s_ActiveProject;
 	bool ProjectService::s_HasActiveProject = false;
 
+	std::vector<MilestoneInfo> ProjectService::s_CachedMilestones;
+	int ProjectService::s_CachedMilestonesProjectId = 0;
+	bool ProjectService::s_HasMilestonesCache = false;
+
+	namespace
+	{
+		std::string TrimCopy(const std::string& raw)
+		{
+			size_t begin = 0;
+			while (begin < raw.size() && std::isspace(static_cast<unsigned char>(raw[begin])))
+				++begin;
+			size_t end = raw.size();
+			while (end > begin && std::isspace(static_cast<unsigned char>(raw[end - 1])))
+				--end;
+			return raw.substr(begin, end - begin);
+		}
+	}
+
 	void ProjectService::InvalidateProjectsCache()
 	{
 		s_CachedProjects.clear();
 		s_HasCache = false;
+	}
+
+	void ProjectService::InvalidateMilestonesCache(int projectId)
+	{
+		if (projectId > 0 && s_HasMilestonesCache && s_CachedMilestonesProjectId != projectId)
+			return;
+
+		s_CachedMilestones.clear();
+		s_CachedMilestonesProjectId = 0;
+		s_HasMilestonesCache = false;
 	}
 
 	void ProjectService::SetActiveProject(const ProjectInfo& project)
@@ -277,6 +305,7 @@ namespace TrackingTool
 		{
 		case DeleteProjectResult::Success:
 			InvalidateProjectsCache();
+			InvalidateMilestonesCache(projectId);
 			if (s_HasActiveProject && s_ActiveProject.Id == projectId)
 				ClearActiveProject();
 			outMessage = "Project deleted successfully.";
@@ -299,6 +328,126 @@ namespace TrackingTool
 			outMessage = "Failed to delete project due to a database error.";
 			return false;
 		}
+	}
+
+	bool ProjectService::CreateMilestone(int projectId, const std::string& name,
+		const std::string& startDate, const std::string& endDate, std::string& outMessage)
+	{
+		outMessage.clear();
+
+		const std::string trimmedName = TrimCopy(name);
+		const std::string trimmedStart = TrimCopy(startDate);
+		const std::string trimmedEnd = TrimCopy(endDate);
+
+		if (trimmedName.empty())
+		{
+			outMessage = "Milestone name is required.";
+			return false;
+		}
+
+		if (!Utils::IsValidMmDdYyyy(trimmedStart))
+		{
+			outMessage = "Start date must be a valid date in MM-DD-YYYY format.";
+			return false;
+		}
+
+		if (!Utils::IsValidMmDdYyyy(trimmedEnd))
+		{
+			outMessage = "End date must be a valid date in MM-DD-YYYY format.";
+			return false;
+		}
+
+		if (Utils::CompareMmDdYyyy(trimmedEnd, trimmedStart) < 0)
+		{
+			outMessage = "End date must be on or after the start date.";
+			return false;
+		}
+
+		if (!AuthService::IsLoggedIn())
+		{
+			outMessage = "You must be logged in to create a milestone.";
+			Log::Error("ProjectService::CreateMilestone: no user is currently logged in.");
+			return false;
+		}
+
+		constexpr float kInitialProgress = 0.0f;
+		const std::string status = Utils::ComputeMilestoneStatus(kInitialProgress, trimmedStart, trimmedEnd);
+		const std::string userName = AuthService::GetLoggedInUser();
+
+		int milestoneId = 0;
+		const InsertMilestoneResult result = Database::InsertMilestone(
+			projectId, trimmedName, trimmedStart, trimmedEnd,
+			kInitialProgress, status, userName, milestoneId);
+
+		switch (result)
+		{
+		case InsertMilestoneResult::Success:
+			InvalidateMilestonesCache(projectId);
+			outMessage = "Milestone \"" + trimmedName + "\" created successfully.";
+			return true;
+
+		case InsertMilestoneResult::ProjectNotFound:
+			outMessage = "Project not found.";
+			return false;
+
+		case InsertMilestoneResult::Forbidden:
+			outMessage = "Only the project leader can create milestones.";
+			return false;
+
+		case InsertMilestoneResult::UserNotFound:
+			outMessage = "Logged-in user was not found in the database.";
+			return false;
+
+		case InsertMilestoneResult::Error:
+		default:
+			outMessage = "Failed to create milestone due to a database error.";
+			return false;
+		}
+	}
+
+	bool ProjectService::GetProjectMilestones(int projectId, std::vector<MilestoneInfo>& outMilestones,
+		std::string& outMessage, bool forceRefresh)
+	{
+		outMilestones.clear();
+		outMessage.clear();
+
+		if (projectId <= 0)
+		{
+			outMessage = "Invalid project.";
+			return false;
+		}
+
+		if (!AuthService::IsLoggedIn())
+		{
+			outMessage = "You must be logged in to view milestones.";
+			Log::Error("ProjectService::GetProjectMilestones: no user is currently logged in.");
+			return false;
+		}
+
+		if (s_HasMilestonesCache && !forceRefresh && s_CachedMilestonesProjectId == projectId)
+		{
+			outMilestones = s_CachedMilestones;
+			outMessage = "Milestones loaded from cache.";
+			return true;
+		}
+
+		if (!Database::GetMilestonesForProject(projectId, outMilestones))
+		{
+			outMessage = "Failed to load milestones from the database.";
+			return false;
+		}
+
+		// Recompute display status from progress + dates so list stays accurate as days pass.
+		for (MilestoneInfo& m : outMilestones)
+		{
+			m.Status = Utils::ComputeMilestoneStatus(m.ProgressPercentage, m.StartDate, m.EndDate);
+		}
+
+		s_CachedMilestones = outMilestones;
+		s_CachedMilestonesProjectId = projectId;
+		s_HasMilestonesCache = true;
+		outMessage = "Milestones loaded.";
+		return true;
 	}
 
 }

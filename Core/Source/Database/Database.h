@@ -41,6 +41,15 @@ namespace TrackingTool
         Error
     };
 
+    enum class InsertMilestoneResult
+    {
+        Success,
+        ProjectNotFound,
+        Forbidden, // caller is not a leader of the project
+        UserNotFound,
+        Error
+    };
+
     struct ProjectInfo
     {
         int Id = 0;
@@ -49,6 +58,17 @@ namespace TrackingTool
         std::string Description;
         std::string CreatedDate;
         std::string Role; // e.g. "leader", "member"
+    };
+
+    struct MilestoneInfo
+    {
+        int Id = 0;
+        int ProjectId = 0;
+        std::string Name;
+        std::string StartDate; // MM-DD-YYYY
+        std::string EndDate;   // MM-DD-YYYY
+        float ProgressPercentage = 0.0f;
+        std::string Status;    // "not started" | "in progress" | "completed"
     };
 
     struct Database
@@ -73,11 +93,19 @@ namespace TrackingTool
         static bool GetProjectsForUser(const std::string& userName, std::vector<ProjectInfo>& outProjects);
 
         // Updates name/description. Only succeeds if userName is a leader of the project.
-        static UpdateProjectResult UpdateProject(int projectId, const std::string& projectName,
-            const std::string& description, const std::string& userName);
+        static UpdateProjectResult UpdateProject(int projectId, const std::string& projectName, const std::string& description, const std::string& userName);
 
         // Deletes the project and its memberships. Only succeeds if userName is a leader.
         static DeleteProjectResult DeleteProject(int projectId, const std::string& userName);
+
+        // Creates a milestone. Only succeeds if userName is a leader of the project.
+        // Dates are expected as MM-DD-YYYY (PostgreSQL DateStyle MDY accepts this).
+        static InsertMilestoneResult InsertMilestone(int projectId, const std::string& milestoneName, const std::string& startDate, const std::string& endDate,
+            float progressPercentage, const std::string& status, const std::string& userName, int& outMilestoneId);
+
+        // All milestones for a project, ordered by start date then id.
+        // Returns false on connection/query failure; true with outMilestones possibly empty.
+        static bool GetMilestonesForProject(int projectId, std::vector<MilestoneInfo>& outMilestones);
     };
 
 }

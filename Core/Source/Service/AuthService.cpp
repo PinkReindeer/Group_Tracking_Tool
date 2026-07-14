@@ -73,6 +73,7 @@ namespace TrackingTool
 			{
 				// Drop any previous session's project list / selection before switching users.
 				ProjectService::InvalidateProjectsCache();
+				ProjectService::InvalidateMilestonesCache();
 				ProjectService::ClearActiveProject();
 				s_LoggedInUser = userName;
 				outMessage = "Login successful.";
@@ -94,6 +95,7 @@ namespace TrackingTool
 	void AuthService::Logout()
 	{
 		ProjectService::InvalidateProjectsCache();
+		ProjectService::InvalidateMilestonesCache();
 		ProjectService::ClearActiveProject();
 		s_LoggedInUser.clear();
 	}

@@ -30,9 +30,21 @@ namespace TrackingTool
 		// Permanently deletes a project the logged-in user leads (and its memberships).
 		static bool DeleteProject(int projectId, std::string& outMessage);
 
+		// Leader-only: creates a milestone with progress 0% and status derived from dates.
+		// startDate / endDate must be MM-DD-YYYY and endDate must be on or after startDate.
+		static bool CreateMilestone(int projectId, const std::string& name,
+			const std::string& startDate, const std::string& endDate, std::string& outMessage);
+
+		// Loads milestones for a project. Uses a per-project session cache unless forceRefresh.
+		static bool GetProjectMilestones(int projectId, std::vector<MilestoneInfo>& outMilestones,
+			std::string& outMessage, bool forceRefresh = false);
+
 		// Drops the in-memory projects list. Call on logout or after mutations that
 		// are not followed by an immediate force-refresh.
 		static void InvalidateProjectsCache();
+
+		// Drops cached milestones (all projects, or a single projectId if > 0).
+		static void InvalidateMilestonesCache(int projectId = 0);
 
 		// Session-selected project (e.g. opened from the dashboard grid).
 		static void SetActiveProject(const ProjectInfo& project);
@@ -46,6 +58,10 @@ namespace TrackingTool
 		static bool s_HasCache;
 		static ProjectInfo s_ActiveProject;
 		static bool s_HasActiveProject;
+
+		static std::vector<MilestoneInfo> s_CachedMilestones;
+		static int s_CachedMilestonesProjectId;
+		static bool s_HasMilestonesCache;
 	};
 
 }

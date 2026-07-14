@@ -5,6 +5,24 @@
 
 #include "Service/ProjectService.h"
 
+#include <cctype>
+
+namespace
+{
+	bool IsLeaderRole(const std::string& role)
+	{
+		static constexpr char kLeader[] = "leader";
+		if (role.size() != sizeof(kLeader) - 1)
+			return false;
+		for (size_t i = 0; i < role.size(); ++i)
+		{
+			if (static_cast<char>(std::tolower(static_cast<unsigned char>(role[i]))) != kLeader[i])
+				return false;
+		}
+		return true;
+	}
+}
+
 ProjectLayer::ProjectLayer()
 {
 	// Prefer the project the user opened from the dashboard grid.
@@ -102,7 +120,9 @@ void ProjectLayer::OnRenderContent()
 	switch (m_ActiveTab)
 	{
 		case ProjectTab::Tasks: m_TasksView.OnRender(projectName, createdDate); break;
-		case ProjectTab::Milestones: m_MilestonesView.OnRender(projectName, createdDate); break;
+		case ProjectTab::Milestones:
+			m_MilestonesView.OnRender(projectName, createdDate, m_Project.Id, IsLeaderRole(m_Project.Role));
+			break;
 		case ProjectTab::Chart: m_ChartView.OnRender(projectName, createdDate); break;
 		case ProjectTab::Workload: m_WorkloadView.OnRender(projectName, createdDate); break;
 		case ProjectTab::Member: m_MemberView.OnRender(projectName, createdDate); break;

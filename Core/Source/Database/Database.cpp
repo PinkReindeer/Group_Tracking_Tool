@@ -499,4 +499,120 @@ namespace TrackingTool
         }
     }
 
+    InsertMilestoneResult Database::InsertMilestone(int projectId, const std::string& milestoneName, const std::string& startDate, const std::string& endDate,
+        float progressPercentage, const std::string& status, const std::string& userName, int& outMilestoneId)
+    {
+        outMilestoneId = 0;
+
+        if (!s_Connection || !s_Connection->is_open())
+        {
+            Log::Error("DB_InsertMilestone: Database is not connected!");
+            return InsertMilestoneResult::Error;
+        }
+
+        try
+        {
+            pqxx::work txn(*s_Connection);
+
+            std::string userId;
+            std::string role;
+            bool projectExists = false;
+            if (!ResolveUserAndRole(txn, projectId, userName, userId, role, projectExists))
+            {
+                Log::Error("DB_InsertMilestone: user '{}' not found.", userName);
+                return InsertMilestoneResult::UserNotFound;
+            }
+            if (!projectExists)
+            {
+                Log::Warn("DB_InsertMilestone: project id {} not found.", projectId);
+                return InsertMilestoneResult::ProjectNotFound;
+            }
+            if (!IsLeaderRoleString(role))
+            {
+                Log::Warn("DB_InsertMilestone: user '{}' is not leader of project {}.", userName, projectId);
+                return InsertMilestoneResult::Forbidden;
+            }
+
+            // Dates are MM-DD-YYYY; PostgreSQL DateStyle MDY accepts them into date columns.
+            // to_date is used for a stable cast regardless of session DateStyle.
+            pqxx::result res = txn.exec_params(
+                "INSERT INTO milestone (projectid, milestonename, startdate, enddate, progresspercentage, status) "
+                "VALUES ($1, $2, to_date($3, 'MM-DD-YYYY'), to_date($4, 'MM-DD-YYYY'), $5, $6) "
+                "RETURNING milestoneid",
+                projectId, milestoneName, startDate, endDate, progressPercentage, status);
+
+            if (res.empty())
+            {
+                Log::Error("DB_InsertMilestone: insert returned no id.");
+                return InsertMilestoneResult::Error;
+            }
+
+            outMilestoneId = res[0][0].as<int>();
+            txn.commit();
+
+            Log::Info("DB_InsertMilestone: milestone '{}' (id {}) created on project {} by '{}'",
+                milestoneName, outMilestoneId, projectId, userName);
+            return InsertMilestoneResult::Success;
+        }
+        catch (const std::exception& e)
+        {
+            Log::Error("DB_InsertMilestone: {}", e.what());
+            return InsertMilestoneResult::Error;
+        }
+    }
+
+    bool Database::GetMilestonesForProject(int projectId, std::vector<MilestoneInfo>& outMilestones)
+    {
+        outMilestones.clear();
+
+        if (!s_Connection || !s_Connection->is_open())
+        {
+            Log::Error("DB_GetMilestonesForProject: Database is not connected!");
+            return false;
+        }
+
+        try
+        {
+            pqxx::work txn(*s_Connection);
+
+            pqxx::result res = txn.exec_params(
+                "SELECT milestoneid, projectid, milestonename, "
+                "to_char(startdate, 'MM-DD-YYYY') AS startdate, "
+                "to_char(enddate, 'MM-DD-YYYY') AS enddate, "
+                "progresspercentage, status "
+                "FROM milestone "
+                "WHERE projectid = $1 "
+                "ORDER BY startdate ASC NULLS LAST, milestoneid ASC",
+                projectId);
+
+            outMilestones.reserve(static_cast<size_t>(res.size()));
+            for (const auto& row : res)
+            {
+                MilestoneInfo info;
+                info.Id = row["milestoneid"].as<int>();
+                info.ProjectId = row["projectid"].as<int>();
+                info.Name = row["milestonename"].as<std::string>();
+                if (!row["startdate"].is_null())
+                    info.StartDate = row["startdate"].as<std::string>();
+                if (!row["enddate"].is_null())
+                    info.EndDate = row["enddate"].as<std::string>();
+                if (!row["progresspercentage"].is_null())
+                    info.ProgressPercentage = row["progresspercentage"].as<float>();
+                if (!row["status"].is_null())
+                    info.Status = row["status"].as<std::string>();
+                outMilestones.push_back(std::move(info));
+            }
+
+            Log::Info("DB_GetMilestonesForProject: loaded {} milestone(s) for project {}",
+                outMilestones.size(), projectId);
+            return true;
+        }
+        catch (const std::exception& e)
+        {
+            Log::Error("DB_GetMilestonesForProject: {}", e.what());
+            outMilestones.clear();
+            return false;
+        }
+    }
+
 } // namespace TrackingTool
