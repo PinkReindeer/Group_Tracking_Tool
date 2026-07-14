@@ -498,7 +498,7 @@ namespace TrackingTool
             return DeleteProjectResult::Error;
         }
     }
-bool Database::GetProjectMembers(int projectId, std::vector<MemberInfo>& outMembers)
+    bool Database::GetProjectMembers(int projectId, std::vector<MemberInfo>& outMembers)
     {
         outMembers.clear();
 
@@ -517,7 +517,7 @@ bool Database::GetProjectMembers(int projectId, std::vector<MemberInfo>& outMemb
                 "FROM users u "
                 "JOIN projectmember pm ON u.userid = pm.userid "
                 "WHERE pm.projectid = $1 "
-                "ORDER BY pm.joindate ASC", 
+                "ORDER BY pm.joindate ASC",
                 projectId
             );
 
@@ -538,12 +538,95 @@ bool Database::GetProjectMembers(int projectId, std::vector<MemberInfo>& outMemb
             return false;
         }
     }
-            bool Database::RemoveMember(int projectId, const std::string& memberName)
+
+    RemoveMemberResult Database::RemoveMember(int projectId, const std::string& memberName,
+        const std::string& actorUserName)
     {
-        std::string sql = "DELETE FROM projectmember WHERE project_id = " + std::to_string(projectId) + 
-                        " AND member_name = '" + memberName + "';";
-        
-        printf("SQL Executed: %s\n", sql.c_str()); 
-        return true; 
+        if (!s_Connection || !s_Connection->is_open())
+        {
+            Log::Error("DB_RemoveMember: Database is not connected!");
+            return RemoveMemberResult::Error;
+        }
+
+        if (memberName.empty())
+        {
+            Log::Warn("DB_RemoveMember: empty member name.");
+            return RemoveMemberResult::MemberNotFound;
+        }
+
+        // Leader cannot remove themselves from the project.
+        if (memberName == actorUserName)
+        {
+            Log::Warn("DB_RemoveMember: user '{}' cannot remove themselves from project {}.",
+                actorUserName, projectId);
+            return RemoveMemberResult::CannotRemoveSelf;
+        }
+
+        try
+        {
+            pqxx::work txn(*s_Connection);
+
+            // Verify actor exists and is a leader of this project.
+            std::string actorUserId;
+            std::string actorRole;
+            bool projectExists = false;
+            if (!ResolveUserAndRole(txn, projectId, actorUserName, actorUserId, actorRole, projectExists))
+            {
+                Log::Error("DB_RemoveMember: actor '{}' not found.", actorUserName);
+                return RemoveMemberResult::UserNotFound;
+            }
+            if (!projectExists)
+            {
+                Log::Warn("DB_RemoveMember: project id {} not found.", projectId);
+                return RemoveMemberResult::ProjectNotFound;
+            }
+            if (!IsLeaderRoleString(actorRole))
+            {
+                Log::Warn("DB_RemoveMember: user '{}' is not leader of project {}.", actorUserName, projectId);
+                return RemoveMemberResult::Forbidden;
+            }
+
+            // Resolve the target member and confirm they belong to the project.
+            pqxx::result targetUserRes = txn.exec_params(
+                "SELECT userid FROM users WHERE username = $1", memberName);
+            if (targetUserRes.empty())
+            {
+                Log::Warn("DB_RemoveMember: target user '{}' not found.", memberName);
+                return RemoveMemberResult::MemberNotFound;
+            }
+            const std::string targetUserId = targetUserRes[0][0].as<std::string>();
+
+            pqxx::result membershipRes = txn.exec_params(
+                "SELECT role FROM projectmember WHERE projectid = $1 AND userid = $2",
+                projectId, targetUserId);
+            if (membershipRes.empty())
+            {
+                Log::Warn("DB_RemoveMember: '{}' is not a member of project {}.", memberName, projectId);
+                return RemoveMemberResult::MemberNotFound;
+            }
+
+            // Do not allow removing another leader (keeps project leadership intact).
+            const std::string targetRole = membershipRes[0][0].as<std::string>();
+            if (IsLeaderRoleString(targetRole))
+            {
+                Log::Warn("DB_RemoveMember: cannot remove leader '{}' from project {}.", memberName, projectId);
+                return RemoveMemberResult::Forbidden;
+            }
+
+            txn.exec_params(
+                "DELETE FROM projectmember WHERE projectid = $1 AND userid = $2",
+                projectId, targetUserId);
+
+            txn.commit();
+            Log::Info("DB_RemoveMember: '{}' removed '{}' from project {}.",
+                actorUserName, memberName, projectId);
+            return RemoveMemberResult::Success;
+        }
+        catch (const std::exception& e)
+        {
+            Log::Error("DB_RemoveMember: {}", e.what());
+            return RemoveMemberResult::Error;
+        }
     }
+
 } // namespace TrackingTool

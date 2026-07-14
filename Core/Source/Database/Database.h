@@ -41,6 +41,17 @@ namespace TrackingTool
         Error
     };
 
+    enum class RemoveMemberResult
+    {
+        Success,
+        ProjectNotFound,
+        Forbidden,       // actor is not a leader of the project
+        CannotRemoveSelf,// leader cannot remove themselves
+        MemberNotFound,  // target is not a member of the project
+        UserNotFound,    // actor username not found
+        Error
+    };
+
     struct ProjectInfo
     {
         int Id = 0;
@@ -87,7 +98,11 @@ namespace TrackingTool
 
         // Deletes the project and its memberships. Only succeeds if userName is a leader.
         static DeleteProjectResult DeleteProject(int projectId, const std::string& userName);
-        static bool RemoveMember(int projectId, const std::string& memberName);
+
+        // Removes memberName from the project. Only succeeds if actorUserName is a leader,
+        // the target is a member, and the actor is not removing themselves.
+        static RemoveMemberResult RemoveMember(int projectId, const std::string& memberName,
+            const std::string& actorUserName);
     };
 
 }

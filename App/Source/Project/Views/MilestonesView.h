@@ -6,5 +6,5 @@ public:
 	MilestonesView() = default;
 	~MilestonesView() = default;
 
-void OnRender(int projectId, const char* projectName, const char* createdDate);
+	void OnRender(const char* projectName, const char* createdDate);
 };
