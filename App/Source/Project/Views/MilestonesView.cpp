@@ -4,7 +4,7 @@
 #include "imgui.h"
 #include "IconsFontAwesome6.h"
 
-void MilestonesView::OnRender(const char* projectName)
+void MilestonesView::OnRender(const char* projectName, const char* createdDate)
 {
 	ImDrawList* drawList = ImGui::GetWindowDrawList();
 	float totalWidth = ImGui::GetContentRegionAvail().x;
@@ -15,6 +15,7 @@ void MilestonesView::OnRender(const char* projectName)
 	ImVec4 borderColor = ImVec4(60.0f / 255.0f, 73.0f / 255.0f, 74.0f / 255.0f, 1.0f); // #3C494A
 
 	const char* displayName = (projectName && projectName[0] != '\0') ? projectName : "Project";
+	const char* displayDate = (createdDate && createdDate[0] != '\0') ? createdDate : "—";
 
 	// --- Header Section ---
 	ImGui::PushStyleColor(ImGuiCol_Text, whiteText);
@@ -25,9 +26,9 @@ void MilestonesView::OnRender(const char* projectName)
 
 	ImGui::SameLine(0.0f, 24.0f);
 
-	// Date Range
+	// Project created date (from database)
 	ImGui::PushStyleColor(ImGuiCol_Text, grayText);
-	ImGui::Text(ICON_FA_CALENDAR " JUN 12 - OCT 28, 2026");
+	ImGui::Text("%s %s", ICON_FA_CALENDAR, displayDate);
 	ImGui::PopStyleColor();
 
 	// Right aligned button

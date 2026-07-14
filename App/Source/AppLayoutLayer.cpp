@@ -239,7 +239,7 @@ void AppLayoutLayer::RenderTopNavBar()
 		if (ImGui::BeginPopup("##UserSettings"))
 		{
 			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(226.0f / 255.0f, 226.0f / 255.0f, 226.0f / 255.0f, 1.0f)); // #E2E2E2
-			if (ImGui::Selectable(ICON_FA_RIGHT_FROM_BRACKET "  Logout", false, 0, ImVec2(140.0f, 0.0f)))
+			if (ImGui::Selectable(ICON_FA_RIGHT_FROM_BRACKET "  Logout", false, 0, ImVec2(100.0f, 0.0f)))
 			{
 				// Defer OpenPopup for the modal to the root layout window.
 				m_OpenLogoutConfirm = true;

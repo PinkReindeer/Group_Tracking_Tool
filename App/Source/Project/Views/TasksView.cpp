@@ -2,7 +2,7 @@
 #include "imgui.h"
 #include "IconsFontAwesome6.h"
 
-void TasksView::OnRender(const char* projectName)
+void TasksView::OnRender(const char* projectName, const char* createdDate)
 {
 	ImDrawList* drawList = ImGui::GetWindowDrawList();
 	float totalWidth = ImGui::GetContentRegionAvail().x;
@@ -13,6 +13,7 @@ void TasksView::OnRender(const char* projectName)
 	ImVec4 borderColor = ImVec4(60.0f / 255.0f, 73.0f / 255.0f, 74.0f / 255.0f, 1.0f); // #3C494A
 
 	const char* displayName = (projectName && projectName[0] != '\0') ? projectName : "Project";
+	const char* displayDate = (createdDate && createdDate[0] != '\0') ? createdDate : "—";
 
 	// Header Section
 	ImGui::PushStyleColor(ImGuiCol_Text, whiteText);
@@ -23,9 +24,9 @@ void TasksView::OnRender(const char* projectName)
 
 	ImGui::SameLine(0.0f, 24.0f);
 
-	// Date Range
+	// Project created date (from database)
 	ImGui::PushStyleColor(ImGuiCol_Text, grayText);
-	ImGui::Text(ICON_FA_CALENDAR " JUN 12 - OCT 28, 2026");
+	ImGui::Text("%s %s", ICON_FA_CALENDAR, displayDate);
 	ImGui::PopStyleColor();
 
 	// Right aligned buttons
@@ -38,7 +39,7 @@ void TasksView::OnRender(const char* projectName)
 	ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
 	ImGui::PushStyleColor(ImGuiCol_Border, borderColor);
 	ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
-	ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 2.0f);
+	ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
 	ImGui::PushStyleColor(ImGuiCol_Text, whiteText);
 	if (ImGui::Button(ICON_FA_FILTER " Filters", ImVec2(filterBtnWidth, 32.0f))) {}
 	ImGui::PopStyleColor(3);
@@ -50,9 +51,9 @@ void TasksView::OnRender(const char* projectName)
 	ImGui::PushStyleColor(ImGuiCol_Button, cyanColor);
 	ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.0f, 193.0f/255.0f, 201.0f/255.0f, 1.0f));
 	ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.0f, 153.0f/255.0f, 161.0f/255.0f, 1.0f));
-	ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 2.0f);
+	ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
 	ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(18.0f/255.0f, 20.0f/255.0f, 20.0f/255.0f, 1.0f)); // Dark text
-	if (ImGui::Button(ICON_FA_PLUS " NEW TASK", ImVec2(btnWidth, 32.0f))) {}
+	if (ImGui::Button(ICON_FA_PLUS " New Task", ImVec2(btnWidth, 32.0f))) {}
 	ImGui::PopStyleColor(4);
 	ImGui::PopStyleVar();
 

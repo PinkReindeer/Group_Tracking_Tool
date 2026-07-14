@@ -2,7 +2,7 @@
 #include "imgui.h"
 #include "IconsFontAwesome6.h"
 
-void ChartView::OnRender(const char* projectName)
+void ChartView::OnRender(const char* projectName, const char* createdDate)
 {
 	ImDrawList* drawList = ImGui::GetWindowDrawList();
 	float totalWidth = ImGui::GetContentRegionAvail().x;
@@ -16,6 +16,7 @@ void ChartView::OnRender(const char* projectName)
 	ImVec4 greenText = ImVec4(0.0f, 255.0f/255.0f, 100.0f/255.0f, 1.0f);
 
 	const char* displayName = (projectName && projectName[0] != '\0') ? projectName : "Project";
+	const char* displayDate = (createdDate && createdDate[0] != '\0') ? createdDate : "—";
 
 	// --- Header Section ---
 	ImGui::PushStyleColor(ImGuiCol_Text, whiteText);
@@ -26,9 +27,9 @@ void ChartView::OnRender(const char* projectName)
 
 	ImGui::SameLine(0.0f, 24.0f);
 
-	// Date Range
+	// Project created date (from database)
 	ImGui::PushStyleColor(ImGuiCol_Text, grayText);
-	ImGui::Text(ICON_FA_CALENDAR " JUN 12 - OCT 28, 2026");
+	ImGui::Text("%s %s", ICON_FA_CALENDAR, displayDate);
 	ImGui::PopStyleColor();
 
 	ImGui::Dummy(ImVec2(0.0f, 10.0f));

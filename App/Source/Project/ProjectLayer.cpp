@@ -96,14 +96,15 @@ void ProjectLayer::OnRenderContent()
 	}
 
 	const char* projectName = m_Project.Name.c_str();
+	const char* createdDate = m_Project.CreatedDate.c_str();
 
 	// Render the content for the currently active tab
 	switch (m_ActiveTab)
 	{
-		case ProjectTab::Tasks: m_TasksView.OnRender(projectName); break;
-		case ProjectTab::Milestones: m_MilestonesView.OnRender(projectName); break;
-		case ProjectTab::Chart: m_ChartView.OnRender(projectName); break;
-		case ProjectTab::Workload: m_WorkloadView.OnRender(projectName); break;
-		case ProjectTab::Member: m_MemberView.OnRender(projectName); break;
+		case ProjectTab::Tasks: m_TasksView.OnRender(projectName, createdDate); break;
+		case ProjectTab::Milestones: m_MilestonesView.OnRender(projectName, createdDate); break;
+		case ProjectTab::Chart: m_ChartView.OnRender(projectName, createdDate); break;
+		case ProjectTab::Workload: m_WorkloadView.OnRender(projectName, createdDate); break;
+		case ProjectTab::Member: m_MemberView.OnRender(projectName, createdDate); break;
 	}
 }

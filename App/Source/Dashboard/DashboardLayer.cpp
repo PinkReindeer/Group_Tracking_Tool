@@ -441,7 +441,7 @@ void DashboardLayer::OnRenderContent()
 				const bool canManage = isLeader;
 
 				ImGui::PushStyleColor(ImGuiCol_Text, whiteText);
-				if (ImGui::Selectable(ICON_FA_PEN "  Edit", false, canManage ? 0 : ImGuiSelectableFlags_Disabled, ImVec2(140.0f, 0.0f)))
+				if (ImGui::Selectable(ICON_FA_PEN "  Edit", false, canManage ? 0 : ImGuiSelectableFlags_Disabled, ImVec2(100.0f, 0.0f)))
 				{
 					m_ActionProjectId = project.Id;
 					m_ActionProjectName = project.Name;
@@ -454,7 +454,7 @@ void DashboardLayer::OnRenderContent()
 				ImGui::PopStyleColor();
 
 				ImGui::PushStyleColor(ImGuiCol_Text, redColor);
-				if (ImGui::Selectable(ICON_FA_TRASH "  Delete", false, canManage ? 0 : ImGuiSelectableFlags_Disabled, ImVec2(140.0f, 0.0f)))
+				if (ImGui::Selectable(ICON_FA_TRASH "  Delete", false, canManage ? 0 : ImGuiSelectableFlags_Disabled, ImVec2(100.0f, 0.0f)))
 				{
 					m_ActionProjectId = project.Id;
 					m_ActionProjectName = project.Name;
