@@ -498,5 +498,52 @@ namespace TrackingTool
             return DeleteProjectResult::Error;
         }
     }
+bool Database::GetProjectMembers(int projectId, std::vector<MemberInfo>& outMembers)
+    {
+        outMembers.clear();
 
+        if (!s_Connection || !s_Connection->is_open())
+        {
+            Log::Error("DB_GetProjectMembers: Database is not connected!");
+            return false;
+        }
+
+        try
+        {
+            pqxx::work txn(*s_Connection);
+
+            pqxx::result res = txn.exec_params(
+                "SELECT u.username, SUBSTR(pm.joindate::text, 1, 10), pm.role "
+                "FROM users u "
+                "JOIN projectmember pm ON u.userid = pm.userid "
+                "WHERE pm.projectid = $1 "
+                "ORDER BY pm.joindate ASC", 
+                projectId
+            );
+
+            for (const auto& row : res)
+            {
+                MemberInfo info;
+                info.Name = row[0].as<std::string>();
+                info.JoinDate = row[1].as<std::string>();
+                info.Role = row[2].as<std::string>();
+                outMembers.push_back(info);
+            }
+
+            return true;
+        }
+        catch (const std::exception& e)
+        {
+            Log::Error("DB_GetProjectMembers: {}", e.what());
+            return false;
+        }
+    }
+            bool Database::RemoveMember(int projectId, const std::string& memberName)
+    {
+        std::string sql = "DELETE FROM projectmember WHERE project_id = " + std::to_string(projectId) + 
+                        " AND member_name = '" + memberName + "';";
+        
+        printf("SQL Executed: %s\n", sql.c_str()); 
+        return true; 
+    }
 } // namespace TrackingTool

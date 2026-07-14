@@ -102,9 +102,8 @@ void ProjectLayer::OnRenderContent()
 	switch (m_ActiveTab)
 	{
 		case ProjectTab::Tasks: m_TasksView.OnRender(projectName, createdDate); break;
-		case ProjectTab::Milestones: m_MilestonesView.OnRender(projectName, createdDate); break;
+		case ProjectTab::Milestones: m_MilestonesView.OnRender(m_Project.Id, projectName, createdDate); break;
 		case ProjectTab::Chart: m_ChartView.OnRender(projectName, createdDate); break;
 		case ProjectTab::Workload: m_WorkloadView.OnRender(projectName, createdDate); break;
-		case ProjectTab::Member: m_MemberView.OnRender(projectName, createdDate); break;
-	}
+        case ProjectTab::Member: m_MemberView.OnRender(m_Project.Id, projectName, createdDate); break;}
 }

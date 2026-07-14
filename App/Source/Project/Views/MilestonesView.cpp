@@ -1,136 +1,94 @@
-#include "imgui.h"
-
+#include "MemberView.h"
 #include "MilestonesView.h"
 #include "imgui.h"
 #include "IconsFontAwesome6.h"
+#include "Database/Database.h"
 
-void MilestonesView::OnRender(const char* projectName, const char* createdDate)
+void MilestonesView::OnRender(int projectId, const char* projectName, const char* createdDate)
 {
-	ImDrawList* drawList = ImGui::GetWindowDrawList();
-	float totalWidth = ImGui::GetContentRegionAvail().x;
+    std::vector<TrackingTool::MemberInfo> members;
+    TrackingTool::Database::GetProjectMembers(projectId, members);
 
-	ImVec4 cyanColor = ImVec4(0.0f, 173.0f / 255.0f, 181.0f / 255.0f, 1.0f); // #00ADB5
-	ImVec4 grayText = ImVec4(187.0f / 255.0f, 201.0f / 255.0f, 202.0f / 255.0f, 1.0f); // #BBC9CA
-	ImVec4 whiteText = ImVec4(226.0f / 255.0f, 226.0f / 255.0f, 226.0f / 255.0f, 1.0f); // #E2E2E2
-	ImVec4 borderColor = ImVec4(60.0f / 255.0f, 73.0f / 255.0f, 74.0f / 255.0f, 1.0f); // #3C494A
+    ImDrawList* drawList = ImGui::GetWindowDrawList();
+    float totalWidth = ImGui::GetContentRegionAvail().x;
+    ImVec2 pMin = ImGui::GetCursorScreenPos();
 
-	const char* displayName = (projectName && projectName[0] != '\0') ? projectName : "Project";
-	const char* displayDate = (createdDate && createdDate[0] != '\0') ? createdDate : "—";
+    ImVec4 cyanColor = ImVec4(0.0f, 173.0f / 255.0f, 181.0f / 255.0f, 1.0f);
+    ImVec4 grayText = ImVec4(187.0f / 255.0f, 201.0f / 255.0f, 202.0f / 255.0f, 1.0f);
+    ImVec4 whiteText = ImVec4(226.0f / 255.0f, 226.0f / 255.0f, 226.0f / 255.0f, 1.0f);
+    ImVec4 borderColor = ImVec4(60.0f / 255.0f, 73.0f / 255.0f, 74.0f / 255.0f, 1.0f);
+    ImVec4 redColor = ImVec4(255.0f / 255.0f, 11.0f / 255.0f, 11.0f / 255.0f, 1.0f);
 
-	// --- Header Section ---
-	ImGui::PushStyleColor(ImGuiCol_Text, whiteText);
-	ImGui::SetWindowFontScale(1.1f);
-	ImGui::Text("%s", displayName);
-	ImGui::SetWindowFontScale(1.0f);
-	ImGui::PopStyleColor();
+    const char* displayName = (projectName && projectName[0] != '\0') ? projectName : "Project";
+    const char* displayDate = (createdDate && createdDate[0] != '\0') ? createdDate : "—";
 
-	ImGui::SameLine(0.0f, 24.0f);
+    // --- Header Section ---
+    ImGui::PushStyleColor(ImGuiCol_Text, whiteText);
+    ImGui::SetWindowFontScale(1.1f);
+    ImGui::Text("%s", displayName);
+    ImGui::SetWindowFontScale(1.0f);
+    ImGui::PopStyleColor();
 
-	// Project created date (from database)
-	ImGui::PushStyleColor(ImGuiCol_Text, grayText);
-	ImGui::Text("%s %s", ICON_FA_CALENDAR, displayDate);
-	ImGui::PopStyleColor();
+    ImGui::SameLine(0.0f, 24.0f);
 
-	// Right aligned button
-	float btnWidth = 140.0f;
-	ImGui::SameLine(totalWidth - btnWidth);
-	
-	// Solid Cyan button (+ New Milestone)
-	ImGui::PushStyleColor(ImGuiCol_Button, cyanColor);
-	ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.0f, 193.0f/255.0f, 201.0f/255.0f, 1.0f));
-	ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.0f, 153.0f/255.0f, 161.0f/255.0f, 1.0f));
-	ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 2.0f);
-	ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(18.0f/255.0f, 20.0f/255.0f, 20.0f/255.0f, 1.0f)); // Dark text
-	if (ImGui::Button(ICON_FA_PLUS " NEW MILESTONE", ImVec2(btnWidth, 32.0f))) {}
-	ImGui::PopStyleColor(4);
-	ImGui::PopStyleVar();
+    ImGui::PushStyleColor(ImGuiCol_Text, grayText);
+    ImGui::Text("%s %s", ICON_FA_CALENDAR, displayDate);
+    ImGui::PopStyleColor();
 
-	ImGui::Dummy(ImVec2(0.0f, 10.0f));
+    ImGui::Dummy(ImVec2(0.0f, 10.0f));
 
-	// Separator Line
-	ImVec2 cursor = ImGui::GetCursorScreenPos();
-	drawList->AddLine(cursor, ImVec2(cursor.x + totalWidth, cursor.y), ImGui::GetColorU32(borderColor), 1.0f);
-	ImGui::Dummy(ImVec2(0.0f, 10.0f));
+    // Separator Line
+    ImVec2 cursor = ImGui::GetCursorScreenPos();
+    drawList->AddLine(cursor, ImVec2(cursor.x + totalWidth, cursor.y), ImGui::GetColorU32(borderColor), 1.0f);
+    ImGui::Dummy(ImVec2(0.0f, 10.0f));
 
-	// --- Active Milestones Title ---
-	ImGui::PushStyleColor(ImGuiCol_Text, whiteText);
-	ImGui::Text(ICON_FA_FLAG " Active Milestones");
-	ImGui::PopStyleColor();
-	
-	ImGui::SameLine(totalWidth - 60.0f);
-	ImGui::PushStyleColor(ImGuiCol_Text, grayText);
-	ImGui::Text("Total: 02");
-	ImGui::PopStyleColor();
+    // --- Table Header ---
+    ImGui::PushStyleColor(ImGuiCol_Text, cyanColor);
+    
+    ImGui::SetCursorPosX(30.0f);
+    ImGui::Text("APPLICANT NAME");
+    
+    ImGui::SameLine(totalWidth * 0.5f);
+    ImGui::Text("TIMESTAMP");
 
-	auto DrawRowSeparator = [&]() {
-		ImGui::Dummy(ImVec2(0.0f, 8.0f));
-		ImVec2 p = ImGui::GetCursorScreenPos();
-		drawList->AddLine(p, ImVec2(p.x + totalWidth, p.y), ImGui::GetColorU32(ImVec4(40.0f/255.0f, 43.0f/255.0f, 43.0f/255.0f, 1.0f)), 1.0f);
-		ImGui::Dummy(ImVec2(0.0f, 8.0f));
-	};
+    ImGui::SameLine(totalWidth - 80.0f);
+    ImGui::Text("ACTIONS");
 
-	DrawRowSeparator();
+    ImGui::PopStyleColor();
 
-	// Helper for Outline Badge
-	auto DrawOutlineBadge = [&](const char* label, ImVec4 outlineColor, ImVec4 textColor, float width) {
-		ImVec2 pos = ImGui::GetCursorScreenPos();
-		pos.y -= 2.0f;
-		drawList->AddRect(pos, ImVec2(pos.x + width, pos.y + 20.0f), ImGui::GetColorU32(outlineColor), 4.0f, 0, 1.0f);
-		
-		ImVec2 textSize = ImGui::CalcTextSize(label);
-		drawList->AddText(ImGui::GetFont(), ImGui::GetFontSize() * 0.8f, ImVec2(pos.x + (width - textSize.x * 0.8f) * 0.5f, pos.y + 3.0f), ImGui::GetColorU32(textColor), label);
-		ImGui::SetCursorPosX(ImGui::GetCursorPosX() + width + 10.0f);
-	};
+    ImGui::Dummy(ImVec2(0.0f, 10.0f));
+    cursor = ImGui::GetCursorScreenPos();
+    drawList->AddLine(cursor, ImVec2(cursor.x + totalWidth, cursor.y), ImGui::GetColorU32(borderColor), 1.0f);
+    
+    for (const auto& member : members)
+    {
+        ImGui::Dummy(ImVec2(0.0f, 15.0f));
+        
+        // Tên
+        ImGui::SetCursorPosX(30.0f);
+        ImGui::PushStyleColor(ImGuiCol_Text, whiteText);
+        ImGui::Text("%s", member.Name.c_str());
+        ImGui::PopStyleColor();
 
-	// --- Milestone 1: Authentication Logic ---
-	ImGui::PushStyleColor(ImGuiCol_Text, whiteText);
-	ImGui::Text("Authentication Logic");
-	ImGui::PopStyleColor();
-	
-	ImGui::SameLine(totalWidth - 80.0f);
-	DrawOutlineBadge("IN PROGRESS", cyanColor, cyanColor, 80.0f);
-	
-	ImGui::Dummy(ImVec2(0.0f, 5.0f));
-	
-	// Progress Bar
-	ImVec2 pbPos = ImGui::GetCursorScreenPos();
-	float pbHeight = 4.0f;
-	drawList->AddRectFilled(pbPos, ImVec2(pbPos.x + totalWidth, pbPos.y + pbHeight), ImGui::GetColorU32(ImVec4(40.0f/255.0f, 43.0f/255.0f, 43.0f/255.0f, 1.0f))); // Background
-	drawList->AddRectFilled(pbPos, ImVec2(pbPos.x + totalWidth * 0.5f, pbPos.y + pbHeight), ImGui::GetColorU32(cyanColor)); // Fill 50%
-	
-	ImGui::Dummy(ImVec2(0.0f, 8.0f));
-	
-	// Subtasks text
-	ImGui::PushStyleColor(ImGuiCol_Text, grayText);
-	ImGui::Text("Subtasks: 1/2");
-	ImGui::SameLine(totalWidth - 30.0f);
-	ImGui::Text("50%%");
-	ImGui::PopStyleColor();
+        ImGui::SameLine(totalWidth * 0.5f);
+        ImGui::PushStyleColor(ImGuiCol_Text, grayText);
+        ImGui::Text("%s", member.JoinDate.c_str());
+        ImGui::PopStyleColor();
 
-	DrawRowSeparator();
-
-	// --- Milestone 2: UI System ---
-	ImGui::PushStyleColor(ImGuiCol_Text, whiteText);
-	ImGui::Text("UI System");
-	ImGui::PopStyleColor();
-	
-	ImGui::SameLine(totalWidth - 80.0f);
-	DrawOutlineBadge("NOT STARTED", grayText, grayText, 80.0f);
-	
-	ImGui::Dummy(ImVec2(0.0f, 5.0f));
-	
-	// Progress Bar
-	pbPos = ImGui::GetCursorScreenPos();
-	drawList->AddRectFilled(pbPos, ImVec2(pbPos.x + totalWidth, pbPos.y + pbHeight), ImGui::GetColorU32(ImVec4(40.0f/255.0f, 43.0f/255.0f, 43.0f/255.0f, 1.0f))); // Background (0% fill)
-	
-	ImGui::Dummy(ImVec2(0.0f, 8.0f));
-	
-	// Subtasks text
-	ImGui::PushStyleColor(ImGuiCol_Text, grayText);
-	ImGui::Text("Subtasks: 0/1");
-	ImGui::SameLine(totalWidth - 20.0f);
-	ImGui::Text("0%%");
-	ImGui::PopStyleColor();
-
-	DrawRowSeparator();
+        ImGui::SameLine(totalWidth - 80.0f);
+        
+        ImGui::PushStyleColor(ImGuiCol_Text, redColor);
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+        ImGui::PushStyleColor(ImGuiCol_Border, redColor);
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+        
+        std::string btnId = "KICK##" + member.Name;
+        if (ImGui::Button(btnId.c_str(), ImVec2(50.0f, 24.0f)))
+        {
+            printf("Kick clicked for: %s\n", member.Name.c_str());
+        }
+        
+        ImGui::PopStyleVar();
+        ImGui::PopStyleColor(3);
+    }
 }
