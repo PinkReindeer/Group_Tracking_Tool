@@ -119,7 +119,9 @@ void ProjectLayer::OnRenderContent()
 	// Render the content for the currently active tab
 	switch (m_ActiveTab)
 	{
-		case ProjectTab::Tasks: m_TasksView.OnRender(projectName, createdDate); break;
+		case ProjectTab::Tasks:
+			m_TasksView.OnRender(projectName, createdDate, m_Project.Id, IsLeaderRole(m_Project.Role));
+			break;
 		case ProjectTab::Milestones:
 			m_MilestonesView.OnRender(projectName, createdDate, m_Project.Id, IsLeaderRole(m_Project.Role));
 			break;

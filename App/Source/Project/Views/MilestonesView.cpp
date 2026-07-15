@@ -7,44 +7,39 @@
 #include "Platform/Application.h"
 #include "Service/ProjectService.h"
 
-#include <cctype>
 #include <cstdio>
 #include <cstring>
 
 namespace
 {
-	// Uppercase for badge labels: "in progress" -> "IN PROGRESS"
-	std::string ToBadgeLabel(const std::string& status)
+
+	const char* ToBadgeLabel(const std::string& status)
 	{
-		std::string out;
-		out.reserve(status.size());
-		for (unsigned char ch : status)
-			out.push_back(static_cast<char>(std::toupper(ch)));
-		return out;
+		if (status == "completed")
+			return "COMPLETED";
+		if (status == "in progress")
+			return "IN PROGRESS";
+		if (status == "not started")
+			return "NOT STARTED";
+		return "UNKNOWN";
 	}
 
 	ImVec4 StatusBadgeColor(const std::string& status, const ImVec4& cyanColor,
 		const ImVec4& grayText, const ImVec4& greenColor)
 	{
-		std::string lower;
-		lower.reserve(status.size());
-		for (unsigned char ch : status)
-			lower.push_back(static_cast<char>(std::tolower(ch)));
-
-		if (lower == "completed")
+		if (status == "completed")
 			return greenColor;
-		if (lower == "in progress")
+		if (status == "in progress")
 			return cyanColor;
 		return grayText; // not started / unknown
 	}
 
-	float StatusBadgeWidth(const std::string& badgeLabel)
+	float StatusBadgeWidth(const char* badgeLabel)
 	{
 		// Enough room for "IN PROGRESS" / "NOT STARTED" / "COMPLETED"
-		if (badgeLabel.size() >= 11)
+		const size_t len = std::strlen(badgeLabel);
+		if (len >= 11)
 			return 90.0f;
-		if (badgeLabel.size() >= 9)
-			return 80.0f;
 		return 80.0f;
 	}
 }
@@ -256,7 +251,7 @@ void MilestonesView::OnRender(const char* projectName, const char* createdDate, 
 		ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.0f, 153.0f / 255.0f, 161.0f / 255.0f, 1.0f));
 		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 2.0f);
 		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(18.0f / 255.0f, 20.0f / 255.0f, 20.0f / 255.0f, 1.0f));
-		if (ImGui::Button(ICON_FA_PLUS " NEW MILESTONE", ImVec2(btnWidth, 32.0f)))
+		if (ImGui::Button(ICON_FA_PLUS " New Milestone", ImVec2(btnWidth, 32.0f)))
 		{
 			ImGui::OpenPopup("Create Milestone");
 		}
@@ -322,7 +317,7 @@ void MilestonesView::OnRender(const char* projectName, const char* createdDate, 
 
 	for (const TrackingTool::MilestoneInfo& milestone : m_Milestones)
 	{
-		const std::string badgeLabel = ToBadgeLabel(milestone.Status);
+		const char* badgeLabel = ToBadgeLabel(milestone.Status);
 		const ImVec4 badgeColor = StatusBadgeColor(milestone.Status, cyanColor, grayText, greenColor);
 		const float badgeWidth = StatusBadgeWidth(badgeLabel);
 
@@ -332,7 +327,7 @@ void MilestonesView::OnRender(const char* projectName, const char* createdDate, 
 		ImGui::PopStyleColor();
 
 		ImGui::SameLine(totalWidth - badgeWidth);
-		DrawOutlineBadge(badgeLabel.c_str(), badgeColor, badgeColor, badgeWidth);
+		DrawOutlineBadge(badgeLabel, badgeColor, badgeColor, badgeWidth);
 
 		if (!milestone.StartDate.empty() || !milestone.EndDate.empty())
 		{

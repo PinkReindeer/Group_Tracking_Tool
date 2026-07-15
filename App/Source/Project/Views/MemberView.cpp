@@ -55,17 +55,13 @@ void MemberView::OnRender(int projectId, const char* projectName, const char* cr
 		needsRefresh = false;
 	}
 
-	const bool isLoggedIn = TrackingTool::AuthService::IsLoggedIn();
-	const std::string currentUser = isLoggedIn
-		? TrackingTool::AuthService::GetLoggedInUser()
-		: std::string{};
+	const std::string& currentUser = TrackingTool::AuthService::GetLoggedInUser();
+	const bool isLoggedIn = !currentUser.empty();
 
-	// Prefer role from the active project session; fall back to membership list.
 	bool canManageMembers = false;
-	TrackingTool::ProjectInfo activeProject;
-	if (TrackingTool::ProjectService::GetActiveProject(activeProject) && activeProject.Id == projectId)
+	if (const TrackingTool::ProjectInfo* activeProject = TrackingTool::ProjectService::TryGetActiveProject(); activeProject && activeProject->Id == projectId)
 	{
-		canManageMembers = IsLeaderRole(activeProject.Role);
+		canManageMembers = IsLeaderRole(activeProject->Role);
 	}
 	else if (isLoggedIn)
 	{
@@ -133,19 +129,20 @@ void MemberView::OnRender(int projectId, const char* projectName, const char* cr
 		ImGui::SameLine(totalWidth - 70.0f);
 		if (canKick)
 		{
-			std::string btnId = "Kick##" + member.Name;
-
+			// PushID scopes the fixed label so rows stay unique without string allocs.
+			ImGui::PushID(member.Name.c_str());
 			ImGui::PushStyleColor(ImGuiCol_Button, redColor);
 			ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
-			if (ImGui::Button(btnId.c_str(), ImVec2(60.0f, 24.0f)))
+			if (ImGui::Button("Kick", ImVec2(60.0f, 24.0f)))
 			{
 				// Open confirmation — do not remove yet.
 				pendingKickMember = member.Name;
 				pendingKickProjectId = projectId;
 				openKickConfirm = true;
 			}
-			ImGui::PopStyleColor();
 			ImGui::PopStyleVar();
+			ImGui::PopStyleColor();
+			ImGui::PopID();
 		}
 		else
 		{
