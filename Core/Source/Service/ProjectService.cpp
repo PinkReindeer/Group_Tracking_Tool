@@ -37,6 +37,10 @@ namespace TrackingTool
 	int ProjectService::s_CachedMilestonesProjectId = 0;
 	bool ProjectService::s_HasMilestonesCache = false;
 
+	std::vector<TaskInfo> ProjectService::s_CachedTasks;
+	int ProjectService::s_CachedTasksProjectId = 0;
+	bool ProjectService::s_HasTasksCache = false;
+
 	namespace
 	{
 		std::string TrimCopy(const std::string& raw)
@@ -67,6 +71,16 @@ namespace TrackingTool
 		s_HasMilestonesCache = false;
 	}
 
+	void ProjectService::InvalidateTasksCache(int projectId)
+	{
+		if (projectId > 0 && s_HasTasksCache && s_CachedTasksProjectId != projectId)
+			return;
+
+		s_CachedTasks.clear();
+		s_CachedTasksProjectId = 0;
+		s_HasTasksCache = false;
+	}
+
 	void ProjectService::SetActiveProject(const ProjectInfo& project)
 	{
 		s_ActiveProject = project;
@@ -85,6 +99,11 @@ namespace TrackingTool
 			return false;
 		outProject = s_ActiveProject;
 		return true;
+	}
+
+	const ProjectInfo* ProjectService::TryGetActiveProject()
+	{
+		return s_HasActiveProject ? &s_ActiveProject : nullptr;
 	}
 
 	bool ProjectService::HasActiveProject()
@@ -306,6 +325,7 @@ namespace TrackingTool
 		case DeleteProjectResult::Success:
 			InvalidateProjectsCache();
 			InvalidateMilestonesCache(projectId);
+			InvalidateTasksCache(projectId);
 			if (s_HasActiveProject && s_ActiveProject.Id == projectId)
 				ClearActiveProject();
 			outMessage = "Project deleted successfully.";
@@ -447,6 +467,580 @@ namespace TrackingTool
 		s_CachedMilestonesProjectId = projectId;
 		s_HasMilestonesCache = true;
 		outMessage = "Milestones loaded.";
+		return true;
+	}
+
+	namespace
+	{
+		bool IsValidTaskPriority(const std::string& priority)
+		{
+			return priority == "low" || priority == "medium"
+				|| priority == "high" || priority == "urgent";
+		}
+	}
+
+	bool ProjectService::CreateTask(int projectId, int milestoneId, int assignedMembershipId,
+		const std::string& name, const std::string& description, float estimatedHours,
+		const std::string& priority, const std::string& deadline,
+		const std::vector<int>& dependsOnTaskIds, std::string& outMessage)
+	{
+		outMessage.clear();
+
+		const std::string trimmedName = TrimCopy(name);
+		const std::string trimmedDescription = TrimCopy(description);
+		const std::string trimmedPriority = TrimCopy(priority);
+		const std::string trimmedDeadline = TrimCopy(deadline);
+
+		if (projectId <= 0)
+		{
+			outMessage = "Invalid project.";
+			return false;
+		}
+
+		if (milestoneId <= 0)
+		{
+			outMessage = "A milestone is required to create a task.";
+			return false;
+		}
+
+		if (trimmedName.empty())
+		{
+			outMessage = "Task name is required.";
+			return false;
+		}
+
+		if (estimatedHours < 0.0f)
+		{
+			outMessage = "Estimated hours cannot be negative.";
+			return false;
+		}
+
+		// Normalize priority to lowercase for storage/validation.
+		std::string priorityLower;
+		priorityLower.reserve(trimmedPriority.size());
+		for (unsigned char ch : trimmedPriority)
+			priorityLower.push_back(static_cast<char>(std::tolower(ch)));
+
+		if (!IsValidTaskPriority(priorityLower))
+		{
+			outMessage = "Priority must be low, medium, high, or urgent.";
+			return false;
+		}
+
+		if (!trimmedDeadline.empty() && !Utils::IsValidMmDdYyyy(trimmedDeadline))
+		{
+			outMessage = "Deadline must be a valid date in MM-DD-YYYY format.";
+			return false;
+		}
+
+		if (!AuthService::IsLoggedIn())
+		{
+			outMessage = "You must be logged in to create a task.";
+			Log::Error("ProjectService::CreateTask: no user is currently logged in.");
+			return false;
+		}
+
+		// Initial status: backlog when unassigned, pending when a member is chosen.
+		const std::string status = (assignedMembershipId > 0) ? "pending" : "backlog";
+		const std::string userName = AuthService::GetLoggedInUser();
+
+		int taskId = 0;
+		const InsertTaskResult result = Database::InsertTask(
+			projectId, milestoneId, assignedMembershipId,
+			trimmedName, trimmedDescription, estimatedHours,
+			priorityLower, trimmedDeadline, status, dependsOnTaskIds, userName, taskId);
+
+		switch (result)
+		{
+		case InsertTaskResult::Success:
+			InvalidateTasksCache(projectId);
+			outMessage = "Task \"" + trimmedName + "\" created successfully.";
+			return true;
+
+		case InsertTaskResult::ProjectNotFound:
+			outMessage = "Project not found.";
+			return false;
+
+		case InsertTaskResult::MilestoneNotFound:
+			outMessage = "Selected milestone was not found on this project.";
+			return false;
+
+		case InsertTaskResult::MemberNotFound:
+			outMessage = "Selected member is not part of this project.";
+			return false;
+
+		case InsertTaskResult::InvalidDependency:
+			outMessage = "Invalid task dependency (missing task, wrong project, self-dependency, or cycle).";
+			return false;
+
+		case InsertTaskResult::Forbidden:
+			outMessage = "Only the project leader can create tasks.";
+			return false;
+
+		case InsertTaskResult::UserNotFound:
+			outMessage = "Logged-in user was not found in the database.";
+			return false;
+
+		case InsertTaskResult::Error:
+		default:
+			outMessage = "Failed to create task due to a database error.";
+			return false;
+		}
+	}
+
+	namespace
+	{
+		// Keep advanced workflow statuses; only bounce backlog <-> pending with assignment.
+		std::string ResolveTaskStatusOnEdit(const std::string& currentStatus, int assignedMembershipId)
+		{
+			const bool assigned = assignedMembershipId > 0;
+			if (currentStatus == "in progress" || currentStatus == "under review" || currentStatus == "done")
+				return currentStatus;
+
+			return assigned ? "pending" : "backlog";
+		}
+	}
+
+	bool ProjectService::UpdateTask(int projectId, int taskId, int milestoneId, int assignedMembershipId,
+		const std::string& name, const std::string& description, float estimatedHours,
+		const std::string& priority, const std::string& deadline, const std::string& currentStatus,
+		const std::vector<int>& dependsOnTaskIds, std::string& outMessage)
+	{
+		outMessage.clear();
+
+		const std::string trimmedName = TrimCopy(name);
+		const std::string trimmedDescription = TrimCopy(description);
+		const std::string trimmedPriority = TrimCopy(priority);
+		const std::string trimmedDeadline = TrimCopy(deadline);
+
+		if (projectId <= 0 || taskId <= 0)
+		{
+			outMessage = "Invalid task.";
+			return false;
+		}
+
+		if (milestoneId <= 0)
+		{
+			outMessage = "A milestone is required.";
+			return false;
+		}
+
+		if (trimmedName.empty())
+		{
+			outMessage = "Task name is required.";
+			return false;
+		}
+
+		if (estimatedHours < 0.0f)
+		{
+			outMessage = "Estimated hours cannot be negative.";
+			return false;
+		}
+
+		std::string priorityLower;
+		priorityLower.reserve(trimmedPriority.size());
+		for (unsigned char ch : trimmedPriority)
+			priorityLower.push_back(static_cast<char>(std::tolower(ch)));
+
+		if (!IsValidTaskPriority(priorityLower))
+		{
+			outMessage = "Priority must be low, medium, high, or urgent.";
+			return false;
+		}
+
+		if (!trimmedDeadline.empty() && !Utils::IsValidMmDdYyyy(trimmedDeadline))
+		{
+			outMessage = "Deadline must be a valid date in MM-DD-YYYY format.";
+			return false;
+		}
+
+		if (!AuthService::IsLoggedIn())
+		{
+			outMessage = "You must be logged in to edit a task.";
+			Log::Error("ProjectService::UpdateTask: no user is currently logged in.");
+			return false;
+		}
+
+		const std::string status = ResolveTaskStatusOnEdit(TrimCopy(currentStatus), assignedMembershipId);
+		const std::string userName = AuthService::GetLoggedInUser();
+
+		const UpdateTaskResult result = Database::UpdateTask(
+			projectId, taskId, milestoneId, assignedMembershipId,
+			trimmedName, trimmedDescription, estimatedHours,
+			priorityLower, trimmedDeadline, status, dependsOnTaskIds, userName);
+
+		switch (result)
+		{
+		case UpdateTaskResult::Success:
+			InvalidateTasksCache(projectId);
+			outMessage = "Task \"" + trimmedName + "\" updated successfully.";
+			return true;
+
+		case UpdateTaskResult::ProjectNotFound:
+			outMessage = "Project not found.";
+			return false;
+
+		case UpdateTaskResult::TaskNotFound:
+			outMessage = "Task not found.";
+			return false;
+
+		case UpdateTaskResult::MilestoneNotFound:
+			outMessage = "Selected milestone was not found on this project.";
+			return false;
+
+		case UpdateTaskResult::MemberNotFound:
+			outMessage = "Selected member is not part of this project.";
+			return false;
+
+		case UpdateTaskResult::InvalidDependency:
+			outMessage = "Invalid task dependency (missing task, wrong project, self-dependency, or cycle).";
+			return false;
+
+		case UpdateTaskResult::Forbidden:
+			outMessage = "Only the project leader can edit tasks.";
+			return false;
+
+		case UpdateTaskResult::UserNotFound:
+			outMessage = "Logged-in user was not found in the database.";
+			return false;
+
+		case UpdateTaskResult::Error:
+		default:
+			outMessage = "Failed to update task due to a database error.";
+			return false;
+		}
+	}
+
+	bool ProjectService::DeleteTask(int projectId, int taskId, std::string& outMessage)
+	{
+		outMessage.clear();
+
+		if (projectId <= 0 || taskId <= 0)
+		{
+			outMessage = "Invalid task.";
+			return false;
+		}
+
+		if (!AuthService::IsLoggedIn())
+		{
+			outMessage = "You must be logged in to delete a task.";
+			Log::Error("ProjectService::DeleteTask: no user is currently logged in.");
+			return false;
+		}
+
+		const std::string userName = AuthService::GetLoggedInUser();
+		const DeleteTaskResult result = Database::DeleteTask(projectId, taskId, userName);
+
+		switch (result)
+		{
+		case DeleteTaskResult::Success:
+			InvalidateTasksCache(projectId);
+			outMessage = "Task deleted successfully.";
+			return true;
+
+		case DeleteTaskResult::ProjectNotFound:
+			outMessage = "Project not found.";
+			return false;
+
+		case DeleteTaskResult::TaskNotFound:
+			outMessage = "Task not found.";
+			return false;
+
+		case DeleteTaskResult::Forbidden:
+			outMessage = "Only the project leader can delete tasks.";
+			return false;
+
+		case DeleteTaskResult::UserNotFound:
+			outMessage = "Logged-in user was not found in the database.";
+			return false;
+
+		case DeleteTaskResult::Error:
+		default:
+			outMessage = "Failed to delete task due to a database error.";
+			return false;
+		}
+	}
+
+	bool ProjectService::AcceptTask(int projectId, int taskId, std::string& outMessage)
+	{
+		outMessage.clear();
+
+		if (projectId <= 0 || taskId <= 0)
+		{
+			outMessage = "Invalid task.";
+			return false;
+		}
+
+		if (!AuthService::IsLoggedIn())
+		{
+			outMessage = "You must be logged in to accept a task.";
+			Log::Error("ProjectService::AcceptTask: no user is currently logged in.");
+			return false;
+		}
+
+		const std::string userName = AuthService::GetLoggedInUser();
+		const AcceptTaskResult result = Database::AcceptTask(projectId, taskId, userName);
+
+		switch (result)
+		{
+		case AcceptTaskResult::Success:
+			InvalidateTasksCache(projectId);
+			outMessage = "Task accepted. Status is now In Progress.";
+			return true;
+
+		case AcceptTaskResult::ProjectNotFound:
+			outMessage = "Project not found.";
+			return false;
+
+		case AcceptTaskResult::TaskNotFound:
+			outMessage = "Task not found.";
+			return false;
+
+		case AcceptTaskResult::Forbidden:
+			outMessage = "Only the assigned member can accept this task.";
+			return false;
+
+		case AcceptTaskResult::InvalidStatus:
+			outMessage = "Only pending tasks can be accepted.";
+			return false;
+
+		case AcceptTaskResult::DependenciesBlocked:
+			outMessage = "Cannot accept this task until all prerequisite tasks are Done.";
+			return false;
+
+		case AcceptTaskResult::UserNotFound:
+			outMessage = "Logged-in user was not found in the database.";
+			return false;
+
+		case AcceptTaskResult::Error:
+		default:
+			outMessage = "Failed to accept task due to a database error.";
+			return false;
+		}
+	}
+
+	bool ProjectService::SubmitTask(int projectId, int taskId,
+		const std::string& executionNotes, const std::string& filePath,
+		const std::string& codeSnippet, std::string& outMessage)
+	{
+		outMessage.clear();
+
+		const std::string notes = TrimCopy(executionNotes);
+		const std::string path = TrimCopy(filePath);
+		const std::string snippet = TrimCopy(codeSnippet);
+
+		if (projectId <= 0 || taskId <= 0)
+		{
+			outMessage = "Invalid task.";
+			return false;
+		}
+
+		if (notes.empty())
+		{
+			outMessage = "Execution notes are required.";
+			return false;
+		}
+
+		if (path.empty())
+		{
+			outMessage = "File path is required.";
+			return false;
+		}
+
+		if (snippet.empty())
+		{
+			outMessage = "Code snippet is required.";
+			return false;
+		}
+
+		if (!AuthService::IsLoggedIn())
+		{
+			outMessage = "You must be logged in to submit a task.";
+			Log::Error("ProjectService::SubmitTask: no user is currently logged in.");
+			return false;
+		}
+
+		// Capture local submission time for deliverablelog.submissiontime.
+		const std::string submissionTime = Utils::GetSubmissionTimestamp();
+		const std::string userName = AuthService::GetLoggedInUser();
+
+		int logId = 0;
+		const SubmitTaskResult result = Database::SubmitTask(
+			projectId, taskId, notes, path, snippet, submissionTime, userName, logId);
+
+		switch (result)
+		{
+		case SubmitTaskResult::Success:
+			InvalidateTasksCache(projectId);
+			outMessage = "Task submitted for review at " + submissionTime + ".";
+			return true;
+
+		case SubmitTaskResult::ProjectNotFound:
+			outMessage = "Project not found.";
+			return false;
+
+		case SubmitTaskResult::TaskNotFound:
+			outMessage = "Task not found.";
+			return false;
+
+		case SubmitTaskResult::Forbidden:
+			outMessage = "Only the assigned member can submit this task.";
+			return false;
+
+		case SubmitTaskResult::InvalidStatus:
+			outMessage = "Only in-progress tasks can be submitted. Accept the task first.";
+			return false;
+
+		case SubmitTaskResult::DependenciesBlocked:
+			outMessage = "Cannot submit this task until all prerequisite tasks are Done.";
+			return false;
+
+		case SubmitTaskResult::UserNotFound:
+			outMessage = "Logged-in user was not found in the database.";
+			return false;
+
+		case SubmitTaskResult::Error:
+		default:
+			outMessage = "Failed to submit task due to a database error.";
+			return false;
+		}
+	}
+
+	bool ProjectService::ReviewTask(int projectId, int taskId, bool approved,
+		const std::string& reviewComment, std::string& outMessage)
+	{
+		outMessage.clear();
+
+		const std::string comment = TrimCopy(reviewComment);
+
+		if (projectId <= 0 || taskId <= 0)
+		{
+			outMessage = "Invalid task.";
+			return false;
+		}
+
+		if (comment.empty())
+		{
+			outMessage = "Review comment is required.";
+			return false;
+		}
+
+		if (!AuthService::IsLoggedIn())
+		{
+			outMessage = "You must be logged in to review a task.";
+			Log::Error("ProjectService::ReviewTask: no user is currently logged in.");
+			return false;
+		}
+
+		const std::string userName = AuthService::GetLoggedInUser();
+		const ReviewTaskResult result = Database::ReviewTask(
+			projectId, taskId, approved, comment, userName);
+
+		switch (result)
+		{
+		case ReviewTaskResult::Success:
+			InvalidateTasksCache(projectId);
+			outMessage = approved
+				? "Task approved. Status is now Done."
+				: "Task rejected. Status is In Progress — member can resubmit.";
+			return true;
+
+		case ReviewTaskResult::ProjectNotFound:
+			outMessage = "Project not found.";
+			return false;
+
+		case ReviewTaskResult::TaskNotFound:
+			outMessage = "Task not found.";
+			return false;
+
+		case ReviewTaskResult::Forbidden:
+			outMessage = "Only the project leader can review submissions.";
+			return false;
+
+		case ReviewTaskResult::InvalidStatus:
+			outMessage = "Only tasks under review can be approved or rejected.";
+			return false;
+
+		case ReviewTaskResult::DependenciesBlocked:
+			outMessage = "Cannot approve this task until all prerequisite tasks are Done.";
+			return false;
+
+		case ReviewTaskResult::UserNotFound:
+			outMessage = "Logged-in user was not found in the database.";
+			return false;
+
+		case ReviewTaskResult::Error:
+		default:
+			outMessage = "Failed to review task due to a database error.";
+			return false;
+		}
+	}
+
+	bool ProjectService::GetLatestDeliverable(int projectId, int taskId,
+		DeliverableInfo& outDeliverable, bool& outFound, std::string& outMessage)
+	{
+		outDeliverable = DeliverableInfo{};
+		outFound = false;
+		outMessage.clear();
+
+		if (projectId <= 0 || taskId <= 0)
+		{
+			outMessage = "Invalid task.";
+			return false;
+		}
+
+		if (!AuthService::IsLoggedIn())
+		{
+			outMessage = "You must be logged in to view submissions.";
+			return false;
+		}
+
+		if (!Database::GetLatestDeliverableForTask(projectId, taskId, outDeliverable, outFound))
+		{
+			outMessage = "Failed to load submission from the database.";
+			return false;
+		}
+
+		outMessage = outFound ? "Submission loaded." : "No submission found.";
+		return true;
+	}
+
+	bool ProjectService::GetProjectTasks(int projectId, std::vector<TaskInfo>& outTasks,
+		std::string& outMessage, bool forceRefresh)
+	{
+		outTasks.clear();
+		outMessage.clear();
+
+		if (projectId <= 0)
+		{
+			outMessage = "Invalid project.";
+			return false;
+		}
+
+		if (!AuthService::IsLoggedIn())
+		{
+			outMessage = "You must be logged in to view tasks.";
+			Log::Error("ProjectService::GetProjectTasks: no user is currently logged in.");
+			return false;
+		}
+
+		if (s_HasTasksCache && !forceRefresh && s_CachedTasksProjectId == projectId)
+		{
+			outTasks = s_CachedTasks;
+			outMessage = "Tasks loaded from cache.";
+			return true;
+		}
+
+		if (!Database::GetTasksForProject(projectId, outTasks))
+		{
+			outMessage = "Failed to load tasks from the database.";
+			return false;
+		}
+
+		s_CachedTasks = outTasks;
+		s_CachedTasksProjectId = projectId;
+		s_HasTasksCache = true;
+		outMessage = "Tasks loaded.";
 		return true;
 	}
 
