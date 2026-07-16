@@ -36,6 +36,7 @@ namespace TrackingTool
 	std::vector<MilestoneInfo> ProjectService::s_CachedMilestones;
 	int ProjectService::s_CachedMilestonesProjectId = 0;
 	bool ProjectService::s_HasMilestonesCache = false;
+	int ProjectService::s_MilestonesCacheGeneration = 0;
 
 	std::vector<TaskInfo> ProjectService::s_CachedTasks;
 	int ProjectService::s_CachedTasksProjectId = 0;
@@ -69,6 +70,12 @@ namespace TrackingTool
 		s_CachedMilestones.clear();
 		s_CachedMilestonesProjectId = 0;
 		s_HasMilestonesCache = false;
+		++s_MilestonesCacheGeneration;
+	}
+
+	int ProjectService::GetMilestonesCacheGeneration()
+	{
+		return s_MilestonesCacheGeneration;
 	}
 
 	void ProjectService::InvalidateTasksCache(int projectId)
@@ -457,7 +464,8 @@ namespace TrackingTool
 			return false;
 		}
 
-		// Recompute display status from progress + dates so list stays accurate as days pass.
+		// Progress comes from task completion (done/total). Status is completed at 100%,
+		// otherwise derived from the planned date window.
 		for (MilestoneInfo& m : outMilestones)
 		{
 			m.Status = Utils::ComputeMilestoneStatus(m.ProgressPercentage, m.StartDate, m.EndDate);
@@ -468,6 +476,158 @@ namespace TrackingTool
 		s_HasMilestonesCache = true;
 		outMessage = "Milestones loaded.";
 		return true;
+	}
+
+	bool ProjectService::UpdateMilestone(int projectId, int milestoneId, const std::string& name,
+		const std::string& startDate, const std::string& endDate, std::string& outMessage)
+	{
+		outMessage.clear();
+
+		const std::string trimmedName = TrimCopy(name);
+		const std::string trimmedStart = TrimCopy(startDate);
+		const std::string trimmedEnd = TrimCopy(endDate);
+
+		if (projectId <= 0 || milestoneId <= 0)
+		{
+			outMessage = "Invalid milestone.";
+			return false;
+		}
+
+		if (trimmedName.empty())
+		{
+			outMessage = "Milestone name is required.";
+			return false;
+		}
+
+		if (!Utils::IsValidMmDdYyyy(trimmedStart))
+		{
+			outMessage = "Start date must be a valid date in MM-DD-YYYY format.";
+			return false;
+		}
+
+		if (!Utils::IsValidMmDdYyyy(trimmedEnd))
+		{
+			outMessage = "End date must be a valid date in MM-DD-YYYY format.";
+			return false;
+		}
+
+		if (Utils::CompareMmDdYyyy(trimmedEnd, trimmedStart) < 0)
+		{
+			outMessage = "End date must be on or after the start date.";
+			return false;
+		}
+
+		if (!AuthService::IsLoggedIn())
+		{
+			outMessage = "You must be logged in to edit a milestone.";
+			Log::Error("ProjectService::UpdateMilestone: no user is currently logged in.");
+			return false;
+		}
+
+		// Preserve current task-based progress when rewriting name/dates.
+		float progress = 0.0f;
+		{
+			std::vector<MilestoneInfo> milestones;
+			std::string loadMsg;
+			if (GetProjectMilestones(projectId, milestones, loadMsg, false))
+			{
+				for (const MilestoneInfo& m : milestones)
+				{
+					if (m.Id == milestoneId)
+					{
+						progress = m.ProgressPercentage;
+						break;
+					}
+				}
+			}
+		}
+
+		const std::string status = Utils::ComputeMilestoneStatus(progress, trimmedStart, trimmedEnd);
+		const std::string userName = AuthService::GetLoggedInUser();
+
+		const UpdateMilestoneResult result = Database::UpdateMilestone(
+			projectId, milestoneId, trimmedName, trimmedStart, trimmedEnd,
+			progress, status, userName);
+
+		switch (result)
+		{
+		case UpdateMilestoneResult::Success:
+			InvalidateMilestonesCache(projectId);
+			outMessage = "Milestone \"" + trimmedName + "\" updated successfully.";
+			return true;
+
+		case UpdateMilestoneResult::ProjectNotFound:
+			outMessage = "Project not found.";
+			return false;
+
+		case UpdateMilestoneResult::MilestoneNotFound:
+			outMessage = "Milestone not found.";
+			return false;
+
+		case UpdateMilestoneResult::Forbidden:
+			outMessage = "Only the project leader can edit milestones.";
+			return false;
+
+		case UpdateMilestoneResult::UserNotFound:
+			outMessage = "Logged-in user was not found in the database.";
+			return false;
+
+		case UpdateMilestoneResult::Error:
+		default:
+			outMessage = "Failed to update milestone due to a database error.";
+			return false;
+		}
+	}
+
+	bool ProjectService::DeleteMilestone(int projectId, int milestoneId, std::string& outMessage)
+	{
+		outMessage.clear();
+
+		if (projectId <= 0 || milestoneId <= 0)
+		{
+			outMessage = "Invalid milestone.";
+			return false;
+		}
+
+		if (!AuthService::IsLoggedIn())
+		{
+			outMessage = "You must be logged in to delete a milestone.";
+			Log::Error("ProjectService::DeleteMilestone: no user is currently logged in.");
+			return false;
+		}
+
+		const std::string userName = AuthService::GetLoggedInUser();
+		const DeleteMilestoneResult result = Database::DeleteMilestone(projectId, milestoneId, userName);
+
+		switch (result)
+		{
+		case DeleteMilestoneResult::Success:
+			InvalidateMilestonesCache(projectId);
+			InvalidateTasksCache(projectId);
+			outMessage = "Milestone deleted successfully.";
+			return true;
+
+		case DeleteMilestoneResult::ProjectNotFound:
+			outMessage = "Project not found.";
+			return false;
+
+		case DeleteMilestoneResult::MilestoneNotFound:
+			outMessage = "Milestone not found.";
+			return false;
+
+		case DeleteMilestoneResult::Forbidden:
+			outMessage = "Only the project leader can delete milestones.";
+			return false;
+
+		case DeleteMilestoneResult::UserNotFound:
+			outMessage = "Logged-in user was not found in the database.";
+			return false;
+
+		case DeleteMilestoneResult::Error:
+		default:
+			outMessage = "Failed to delete milestone due to a database error.";
+			return false;
+		}
 	}
 
 	namespace
@@ -554,6 +714,7 @@ namespace TrackingTool
 		{
 		case InsertTaskResult::Success:
 			InvalidateTasksCache(projectId);
+			InvalidateMilestonesCache(projectId); // task totals/progress changed
 			outMessage = "Task \"" + trimmedName + "\" created successfully.";
 			return true;
 
@@ -673,6 +834,7 @@ namespace TrackingTool
 		{
 		case UpdateTaskResult::Success:
 			InvalidateTasksCache(projectId);
+			InvalidateMilestonesCache(projectId); // milestone assignment / progress may change
 			outMessage = "Task \"" + trimmedName + "\" updated successfully.";
 			return true;
 
@@ -735,6 +897,7 @@ namespace TrackingTool
 		{
 		case DeleteTaskResult::Success:
 			InvalidateTasksCache(projectId);
+			InvalidateMilestonesCache(projectId); // task totals/progress changed
 			outMessage = "Task deleted successfully.";
 			return true;
 
@@ -940,6 +1103,8 @@ namespace TrackingTool
 		{
 		case ReviewTaskResult::Success:
 			InvalidateTasksCache(projectId);
+			if (approved)
+				InvalidateMilestonesCache(projectId); // completion % may hit 100%
 			outMessage = approved
 				? "Task approved. Status is now Done."
 				: "Task rejected. Status is In Progress — member can resubmit.";

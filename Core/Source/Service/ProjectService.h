@@ -35,7 +35,16 @@ namespace TrackingTool
 		static bool CreateMilestone(int projectId, const std::string& name, const std::string& startDate, const std::string& endDate, std::string& outMessage);
 
 		// Loads milestones for a project. Uses a per-project session cache unless forceRefresh.
+		// Progress and status are derived from task completion (100% → completed).
 		static bool GetProjectMilestones(int projectId, std::vector<MilestoneInfo>& outMilestones, std::string& outMessage, bool forceRefresh = false);
+
+		// Leader-only: updates milestone name and dates. Status is recomputed from current task progress + dates.
+		// startDate / endDate must be MM-DD-YYYY and endDate must be on or after startDate.
+		static bool UpdateMilestone(int projectId, int milestoneId, const std::string& name,
+			const std::string& startDate, const std::string& endDate, std::string& outMessage);
+
+		// Leader-only: permanently deletes a milestone and all of its tasks.
+		static bool DeleteMilestone(int projectId, int milestoneId, std::string& outMessage);
 
 		// Leader-only: creates a task under a milestone.
 		// assignedMembershipId 0 = unassigned (status backlog); >0 = pending.
@@ -85,7 +94,12 @@ namespace TrackingTool
 		static void InvalidateProjectsCache();
 
 		// Drops cached milestones (all projects, or a single projectId if > 0).
+		// Bumps GetMilestonesCacheGeneration() so views can skip per-frame reloads.
 		static void InvalidateMilestonesCache(int projectId = 0);
+
+		// Monotonic stamp; increments whenever the milestones cache is dropped.
+		// Views compare against a local copy to reload only when data may have changed.
+		static int GetMilestonesCacheGeneration();
 
 		// Drops cached tasks (all projects, or a single projectId if > 0).
 		static void InvalidateTasksCache(int projectId = 0);
@@ -109,6 +123,7 @@ namespace TrackingTool
 		static std::vector<MilestoneInfo> s_CachedMilestones;
 		static int s_CachedMilestonesProjectId;
 		static bool s_HasMilestonesCache;
+		static int s_MilestonesCacheGeneration;
 
 		static std::vector<TaskInfo> s_CachedTasks;
 		static int s_CachedTasksProjectId;

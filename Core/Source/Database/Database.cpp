@@ -708,14 +708,18 @@ namespace TrackingTool
         {
             pqxx::work txn(*s_Connection);
 
+            // Task counts drive completion % (done / total). Stored progress is ignored for display.
             pqxx::result res = txn.exec_params(
-                "SELECT milestoneid, projectid, milestonename, "
-                "to_char(startdate, 'MM-DD-YYYY') AS startdate, "
-                "to_char(enddate, 'MM-DD-YYYY') AS enddate, "
-                "progresspercentage, status "
-                "FROM milestone "
-                "WHERE projectid = $1 "
-                "ORDER BY startdate ASC NULLS LAST, milestoneid ASC",
+                "SELECT m.milestoneid, m.projectid, m.milestonename, "
+                "to_char(m.startdate, 'MM-DD-YYYY') AS startdate, "
+                "to_char(m.enddate, 'MM-DD-YYYY') AS enddate, "
+                "COALESCE(COUNT(t.taskid), 0) AS total_tasks, "
+                "COALESCE(COUNT(t.taskid) FILTER (WHERE LOWER(t.taskstatus) = 'done'), 0) AS done_tasks "
+                "FROM milestone m "
+                "LEFT JOIN task t ON t.milestoneid = m.milestoneid "
+                "WHERE m.projectid = $1 "
+                "GROUP BY m.milestoneid, m.projectid, m.milestonename, m.startdate, m.enddate "
+                "ORDER BY m.startdate ASC NULLS LAST, m.milestoneid ASC",
                 projectId);
 
             outMilestones.reserve(static_cast<size_t>(res.size()));
@@ -729,10 +733,15 @@ namespace TrackingTool
                     info.StartDate = row["startdate"].as<std::string>();
                 if (!row["enddate"].is_null())
                     info.EndDate = row["enddate"].as<std::string>();
-                if (!row["progresspercentage"].is_null())
-                    info.ProgressPercentage = row["progresspercentage"].as<float>();
-                if (!row["status"].is_null())
-                    info.Status = row["status"].as<std::string>();
+
+                info.TotalTasks = row["total_tasks"].as<int>();
+                info.DoneTasks = row["done_tasks"].as<int>();
+                if (info.TotalTasks > 0)
+                    info.ProgressPercentage = (static_cast<float>(info.DoneTasks) * 100.0f)
+                        / static_cast<float>(info.TotalTasks);
+                else
+                    info.ProgressPercentage = 0.0f;
+
                 outMilestones.push_back(std::move(info));
             }
 
@@ -745,6 +754,124 @@ namespace TrackingTool
             Log::Error("DB_GetMilestonesForProject: {}", e.what());
             outMilestones.clear();
             return false;
+        }
+    }
+
+    UpdateMilestoneResult Database::UpdateMilestone(int projectId, int milestoneId,
+        const std::string& milestoneName, const std::string& startDate, const std::string& endDate,
+        float progressPercentage, const std::string& status, const std::string& userName)
+    {
+        if (!s_Connection || !s_Connection->is_open())
+        {
+            Log::Error("DB_UpdateMilestone: Database is not connected!");
+            return UpdateMilestoneResult::Error;
+        }
+
+        try
+        {
+            pqxx::work txn(*s_Connection);
+
+            std::string userId;
+            std::string role;
+            bool projectExists = false;
+            if (!ResolveUserAndRole(txn, projectId, userName, userId, role, projectExists))
+            {
+                Log::Error("DB_UpdateMilestone: user '{}' not found.", userName);
+                return UpdateMilestoneResult::UserNotFound;
+            }
+            if (!projectExists)
+            {
+                Log::Warn("DB_UpdateMilestone: project id {} not found.", projectId);
+                return UpdateMilestoneResult::ProjectNotFound;
+            }
+            if (!IsLeaderRoleString(role))
+            {
+                Log::Warn("DB_UpdateMilestone: user '{}' is not leader of project {}.", userName, projectId);
+                return UpdateMilestoneResult::Forbidden;
+            }
+
+            pqxx::result existsRes = txn.exec_params(
+                "SELECT 1 FROM milestone WHERE milestoneid = $1 AND projectid = $2",
+                milestoneId, projectId);
+            if (existsRes.empty())
+            {
+                Log::Warn("DB_UpdateMilestone: milestone {} not found on project {}.", milestoneId, projectId);
+                return UpdateMilestoneResult::MilestoneNotFound;
+            }
+
+            txn.exec_params(
+                "UPDATE milestone SET milestonename = $1, "
+                "startdate = to_date($2, 'MM-DD-YYYY'), enddate = to_date($3, 'MM-DD-YYYY'), "
+                "progresspercentage = $4, status = $5 "
+                "WHERE milestoneid = $6 AND projectid = $7",
+                milestoneName, startDate, endDate, progressPercentage, status, milestoneId, projectId);
+
+            txn.commit();
+            Log::Info("DB_UpdateMilestone: milestone {} updated on project {} by '{}'",
+                milestoneId, projectId, userName);
+            return UpdateMilestoneResult::Success;
+        }
+        catch (const std::exception& e)
+        {
+            Log::Error("DB_UpdateMilestone: {}", e.what());
+            return UpdateMilestoneResult::Error;
+        }
+    }
+
+    DeleteMilestoneResult Database::DeleteMilestone(int projectId, int milestoneId, const std::string& userName)
+    {
+        if (!s_Connection || !s_Connection->is_open())
+        {
+            Log::Error("DB_DeleteMilestone: Database is not connected!");
+            return DeleteMilestoneResult::Error;
+        }
+
+        try
+        {
+            pqxx::work txn(*s_Connection);
+
+            std::string userId;
+            std::string role;
+            bool projectExists = false;
+            if (!ResolveUserAndRole(txn, projectId, userName, userId, role, projectExists))
+            {
+                Log::Error("DB_DeleteMilestone: user '{}' not found.", userName);
+                return DeleteMilestoneResult::UserNotFound;
+            }
+            if (!projectExists)
+            {
+                Log::Warn("DB_DeleteMilestone: project id {} not found.", projectId);
+                return DeleteMilestoneResult::ProjectNotFound;
+            }
+            if (!IsLeaderRoleString(role))
+            {
+                Log::Warn("DB_DeleteMilestone: user '{}' is not leader of project {}.", userName, projectId);
+                return DeleteMilestoneResult::Forbidden;
+            }
+
+            pqxx::result existsRes = txn.exec_params(
+                "SELECT 1 FROM milestone WHERE milestoneid = $1 AND projectid = $2",
+                milestoneId, projectId);
+            if (existsRes.empty())
+            {
+                Log::Warn("DB_DeleteMilestone: milestone {} not found on project {}.", milestoneId, projectId);
+                return DeleteMilestoneResult::MilestoneNotFound;
+            }
+
+            // Remove tasks under this milestone first (dependencies/deliverables cascade from task).
+            txn.exec_params("DELETE FROM task WHERE milestoneid = $1", milestoneId);
+            txn.exec_params("DELETE FROM milestone WHERE milestoneid = $1 AND projectid = $2",
+                milestoneId, projectId);
+
+            txn.commit();
+            Log::Info("DB_DeleteMilestone: milestone {} deleted from project {} by '{}'",
+                milestoneId, projectId, userName);
+            return DeleteMilestoneResult::Success;
+        }
+        catch (const std::exception& e)
+        {
+            Log::Error("DB_DeleteMilestone: {}", e.what());
+            return DeleteMilestoneResult::Error;
         }
     }
 

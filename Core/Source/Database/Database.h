@@ -50,6 +50,26 @@ namespace TrackingTool
         Error
     };
 
+    enum class UpdateMilestoneResult
+    {
+        Success,
+        ProjectNotFound,
+        MilestoneNotFound,
+        Forbidden, // caller is not a leader of the project
+        UserNotFound,
+        Error
+    };
+
+    enum class DeleteMilestoneResult
+    {
+        Success,
+        ProjectNotFound,
+        MilestoneNotFound,
+        Forbidden, // caller is not a leader of the project
+        UserNotFound,
+        Error
+    };
+
     enum class InsertTaskResult
     {
         Success,
@@ -151,6 +171,8 @@ namespace TrackingTool
         std::string EndDate;   // MM-DD-YYYY
         float ProgressPercentage = 0.0f;
         std::string Status;    // "not started" | "in progress" | "completed"
+        int TotalTasks = 0;    // tasks under this milestone
+        int DoneTasks = 0;     // tasks with status "done"
     };
 
     struct MemberInfo
@@ -235,8 +257,18 @@ namespace TrackingTool
             float progressPercentage, const std::string& status, const std::string& userName, int& outMilestoneId);
 
         // All milestones for a project, ordered by start date then id.
+        // Fills TotalTasks / DoneTasks and derives ProgressPercentage from task completion.
         // Returns false on connection/query failure; true with outMilestones possibly empty.
         static bool GetMilestonesForProject(int projectId, std::vector<MilestoneInfo>& outMilestones);
+
+        // Updates name and dates. Only succeeds if userName is a leader and the milestone belongs to the project.
+        // progressPercentage / status are written as provided (caller typically recomputes from tasks/dates).
+        static UpdateMilestoneResult UpdateMilestone(int projectId, int milestoneId,
+            const std::string& milestoneName, const std::string& startDate, const std::string& endDate,
+            float progressPercentage, const std::string& status, const std::string& userName);
+
+        // Deletes a milestone and its tasks. Only succeeds if userName is a leader.
+        static DeleteMilestoneResult DeleteMilestone(int projectId, int milestoneId, const std::string& userName);
 
         // Creates a task under a milestone. Only succeeds if userName is a leader of the project.
         // assignedMembershipId may be 0 for unassigned. deadline is MM-DD-YYYY (empty allowed).

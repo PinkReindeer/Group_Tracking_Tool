@@ -42,6 +42,17 @@ namespace
 			return 90.0f;
 		return 80.0f;
 	}
+
+	void CopyToBuffer(char* dest, size_t destSize, const std::string& src)
+	{
+		if (destSize == 0)
+			return;
+#if defined(_WIN32)
+		strncpy_s(dest, destSize, src.c_str(), _TRUNCATE);
+#else
+		std::snprintf(dest, destSize, "%s", src.c_str());
+#endif
+	}
 }
 
 void MilestonesView::EnsureMilestonesLoaded(int projectId, bool forceRefresh)
@@ -50,32 +61,54 @@ void MilestonesView::EnsureMilestonesLoaded(int projectId, bool forceRefresh)
 	{
 		m_Milestones.clear();
 		m_LoadedProjectId = 0;
+		m_LoadedCacheGeneration = -1;
 		m_HasLoaded = false;
 		return;
 	}
 
-	if (!forceRefresh && m_HasLoaded && m_LoadedProjectId == projectId)
-		return;
+	const int cacheGen = TrackingTool::ProjectService::GetMilestonesCacheGeneration();
 
-	std::string message;
-	std::vector<TrackingTool::MilestoneInfo> milestones;
-	if (TrackingTool::ProjectService::GetProjectMilestones(projectId, milestones, message, forceRefresh))
+	// Hot path: already have this project's list and the service cache was not invalidated
+	// (task create/update/delete/approve bumps the generation). Zero allocations.
+	if (!forceRefresh && m_HasLoaded && m_LoadedProjectId == projectId
+		&& m_LoadedCacheGeneration == cacheGen)
 	{
-		m_Milestones = std::move(milestones);
+		return;
+	}
+
+	// Load into reusable members (capacity retained across frames / reloads).
+	if (TrackingTool::ProjectService::GetProjectMilestones(
+		projectId, m_LoadScratch, m_LoadMessage, forceRefresh))
+	{
+		m_Milestones.swap(m_LoadScratch);
+		m_LoadScratch.clear(); // keeps capacity; drops old elements after swap
 		m_LoadedProjectId = projectId;
+		m_LoadedCacheGeneration = TrackingTool::ProjectService::GetMilestonesCacheGeneration();
 		m_HasLoaded = true;
 	}
 	else
 	{
-		// Keep previous list only if it was for this project; otherwise clear.
-		if (m_LoadedProjectId != projectId)
+		const bool projectChanged = (m_LoadedProjectId != projectId);
+		if (projectChanged)
 		{
 			m_Milestones.clear();
 			m_LoadedProjectId = projectId;
+			m_LoadedCacheGeneration = -1;
 			m_HasLoaded = false;
 		}
-		TrackingTool::Application::Get().PushNotification(message, NotificationType::Error);
+		// Notify once per failed load attempt for this project (not every frame).
+		if (forceRefresh || projectChanged || !m_HasLoaded)
+			TrackingTool::Application::Get().PushNotification(m_LoadMessage, NotificationType::Error);
 	}
+}
+
+void MilestonesView::OpenEditForMilestone(const TrackingTool::MilestoneInfo& milestone)
+{
+	m_EditMilestoneId = milestone.Id;
+	CopyToBuffer(m_EditMilestoneName, sizeof(m_EditMilestoneName), milestone.Name);
+	CopyToBuffer(m_EditStartDate, sizeof(m_EditStartDate), milestone.StartDate);
+	CopyToBuffer(m_EditEndDate, sizeof(m_EditEndDate), milestone.EndDate);
+	m_OpenEditModal = true;
 }
 
 void MilestonesView::RenderCreateMilestoneModal(int projectId)
@@ -211,6 +244,240 @@ void MilestonesView::RenderCreateMilestoneModal(int projectId)
 	ImGui::PopStyleColor(2);
 }
 
+void MilestonesView::RenderEditMilestoneModal(int projectId)
+{
+	const ImVec4 cyanColor = ImVec4(0.0f, 173.0f / 255.0f, 181.0f / 255.0f, 1.0f);
+	const ImVec4 grayText = ImVec4(187.0f / 255.0f, 201.0f / 255.0f, 202.0f / 255.0f, 1.0f);
+	const ImVec4 whiteText = ImVec4(226.0f / 255.0f, 226.0f / 255.0f, 226.0f / 255.0f, 1.0f);
+	const ImVec4 borderColor = ImVec4(60.0f / 255.0f, 73.0f / 255.0f, 74.0f / 255.0f, 1.0f);
+	const ImVec4 boxBgColor = ImVec4(26.0f / 255.0f, 28.0f / 255.0f, 28.0f / 255.0f, 1.0f);
+
+	if (m_OpenEditModal)
+	{
+		ImGui::OpenPopup("Edit Milestone");
+		m_OpenEditModal = false;
+	}
+
+	const ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+	ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+	ImGui::PushStyleColor(ImGuiCol_PopupBg, boxBgColor);
+	ImGui::PushStyleColor(ImGuiCol_Border, borderColor);
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 6.0f);
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(24.0f, 24.0f));
+
+	if (ImGui::BeginPopupModal("Edit Milestone", nullptr,
+		ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar))
+	{
+		ImGui::PushStyleColor(ImGuiCol_Text, whiteText);
+		ImGui::SetWindowFontScale(1.2f);
+		ImGui::Text(ICON_FA_PEN_TO_SQUARE " Edit Milestone");
+		ImGui::SetWindowFontScale(1.0f);
+		ImGui::PopStyleColor();
+
+		ImGui::Dummy(ImVec2(0.0f, 8.0f));
+
+		ImGui::PushStyleColor(ImGuiCol_Text, grayText);
+		ImGui::PushTextWrapPos(ImGui::GetCursorPos().x + 350.0f);
+		ImGui::TextWrapped("Dates must use MM-DD-YYYY. Completion is calculated from tasks under this milestone.");
+		ImGui::PopTextWrapPos();
+		ImGui::PopStyleColor();
+
+		ImGui::Dummy(ImVec2(0.0f, 15.0f));
+
+		ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(15.0f / 255.0f, 16.0f / 255.0f, 16.0f / 255.0f, 1.0f));
+		ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(35.0f / 255.0f, 38.0f / 255.0f, 38.0f / 255.0f, 1.0f));
+		ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(45.0f / 255.0f, 48.0f / 255.0f, 48.0f / 255.0f, 1.0f));
+		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
+		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10.0f, 10.0f));
+
+		ImGui::PushStyleColor(ImGuiCol_Text, grayText);
+		ImGui::Text("MILESTONE NAME");
+		ImGui::PopStyleColor();
+
+		ImGui::PushStyleColor(ImGuiCol_Text, whiteText);
+		ImGui::SetNextItemWidth(350.0f);
+		if (ImGui::IsWindowAppearing())
+			ImGui::SetKeyboardFocusHere();
+		ImGui::InputText("##EditMilestoneName", m_EditMilestoneName, IM_ARRAYSIZE(m_EditMilestoneName));
+		ImGui::PopStyleColor();
+
+		ImGui::Dummy(ImVec2(0.0f, 10.0f));
+
+		ImGui::PushStyleColor(ImGuiCol_Text, grayText);
+		ImGui::Text("START DATE (MM-DD-YYYY)");
+		ImGui::PopStyleColor();
+
+		ImGui::PushStyleColor(ImGuiCol_Text, whiteText);
+		ImGui::SetNextItemWidth(350.0f);
+		ImGui::InputTextWithHint("##EditMilestoneStart", "e.g. 07-14-2026", m_EditStartDate, IM_ARRAYSIZE(m_EditStartDate));
+		ImGui::PopStyleColor();
+
+		ImGui::Dummy(ImVec2(0.0f, 10.0f));
+
+		ImGui::PushStyleColor(ImGuiCol_Text, grayText);
+		ImGui::Text("END DATE (MM-DD-YYYY)");
+		ImGui::PopStyleColor();
+
+		ImGui::PushStyleColor(ImGuiCol_Text, whiteText);
+		ImGui::SetNextItemWidth(350.0f);
+		ImGui::InputTextWithHint("##EditMilestoneEnd", "e.g. 08-01-2026", m_EditEndDate, IM_ARRAYSIZE(m_EditEndDate));
+		ImGui::PopStyleColor();
+
+		ImGui::PopStyleVar(2);
+		ImGui::PopStyleColor(3);
+
+		ImGui::Dummy(ImVec2(0.0f, 20.0f));
+
+		const float modalBtnWidth = (350.0f - 10.0f) / 2.0f;
+
+		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+		ImGui::PushStyleColor(ImGuiCol_Border, borderColor);
+		ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
+		ImGui::PushStyleColor(ImGuiCol_Text, whiteText);
+		if (ImGui::Button("Cancel##EditMilestone", ImVec2(modalBtnWidth, 36.0f)))
+		{
+			m_EditMilestoneId = 0;
+			memset(m_EditMilestoneName, 0, sizeof(m_EditMilestoneName));
+			memset(m_EditStartDate, 0, sizeof(m_EditStartDate));
+			memset(m_EditEndDate, 0, sizeof(m_EditEndDate));
+			ImGui::CloseCurrentPopup();
+		}
+		ImGui::PopStyleColor(3);
+		ImGui::PopStyleVar(2);
+
+		ImGui::SameLine(0, 10.0f);
+
+		ImGui::PushStyleColor(ImGuiCol_Button, cyanColor);
+		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.0f, 193.0f / 255.0f, 201.0f / 255.0f, 1.0f));
+		ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.0f, 153.0f / 255.0f, 161.0f / 255.0f, 1.0f));
+		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
+		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(18.0f / 255.0f, 20.0f / 255.0f, 20.0f / 255.0f, 1.0f));
+		if (ImGui::Button("Save##EditMilestone", ImVec2(modalBtnWidth, 36.0f)))
+		{
+			std::string message;
+			if (TrackingTool::ProjectService::UpdateMilestone(
+				projectId, m_EditMilestoneId, m_EditMilestoneName, m_EditStartDate, m_EditEndDate, message))
+			{
+				TrackingTool::Application::Get().PushNotification(message, NotificationType::Info);
+				EnsureMilestonesLoaded(projectId, true);
+
+				m_EditMilestoneId = 0;
+				memset(m_EditMilestoneName, 0, sizeof(m_EditMilestoneName));
+				memset(m_EditStartDate, 0, sizeof(m_EditStartDate));
+				memset(m_EditEndDate, 0, sizeof(m_EditEndDate));
+				ImGui::CloseCurrentPopup();
+			}
+			else
+			{
+				TrackingTool::Application::Get().PushNotification(message, NotificationType::Error);
+			}
+		}
+		ImGui::SetItemDefaultFocus();
+		ImGui::PopStyleColor(4);
+		ImGui::PopStyleVar();
+
+		ImGui::EndPopup();
+	}
+
+	ImGui::PopStyleVar(2);
+	ImGui::PopStyleColor(2);
+}
+
+void MilestonesView::RenderDeleteMilestoneModal(int projectId)
+{
+	const ImVec4 grayText = ImVec4(187.0f / 255.0f, 201.0f / 255.0f, 202.0f / 255.0f, 1.0f);
+	const ImVec4 whiteText = ImVec4(226.0f / 255.0f, 226.0f / 255.0f, 226.0f / 255.0f, 1.0f);
+	const ImVec4 borderColor = ImVec4(60.0f / 255.0f, 73.0f / 255.0f, 74.0f / 255.0f, 1.0f);
+	const ImVec4 boxBgColor = ImVec4(26.0f / 255.0f, 28.0f / 255.0f, 28.0f / 255.0f, 1.0f);
+	const ImVec4 redColor = ImVec4(238.0f / 255.0f, 56.0f / 255.0f, 56.0f / 255.0f, 1.0f);
+
+	if (m_OpenDeleteModal)
+	{
+		ImGui::OpenPopup("Delete Milestone");
+		m_OpenDeleteModal = false;
+	}
+
+	const ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+	ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+	ImGui::PushStyleColor(ImGuiCol_PopupBg, boxBgColor);
+	ImGui::PushStyleColor(ImGuiCol_Border, borderColor);
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 6.0f);
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(24.0f, 24.0f));
+
+	if (ImGui::BeginPopupModal("Delete Milestone", nullptr,
+		ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar))
+	{
+		ImGui::PushStyleColor(ImGuiCol_Text, whiteText);
+		ImGui::SetWindowFontScale(1.2f);
+		ImGui::Text(ICON_FA_TRASH " Delete Milestone");
+		ImGui::SetWindowFontScale(1.0f);
+		ImGui::PopStyleColor();
+
+		ImGui::Dummy(ImVec2(0.0f, 8.0f));
+
+		ImGui::PushStyleColor(ImGuiCol_Text, grayText);
+		ImGui::PushTextWrapPos(ImGui::GetCursorPos().x + 350.0f);
+		ImGui::TextWrapped(
+			"Are you sure you want to delete \"%s\"? All tasks under this milestone will also be removed. This cannot be undone.",
+			m_PendingDeleteMilestoneName.empty() ? "this milestone" : m_PendingDeleteMilestoneName.c_str());
+		ImGui::PopTextWrapPos();
+		ImGui::PopStyleColor();
+
+		ImGui::Dummy(ImVec2(0.0f, 20.0f));
+
+		const float modalBtnWidth = (350.0f - 10.0f) / 2.0f;
+
+		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+		ImGui::PushStyleColor(ImGuiCol_Border, borderColor);
+		ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
+		ImGui::PushStyleColor(ImGuiCol_Text, whiteText);
+		if (ImGui::Button("Cancel##DeleteMilestone", ImVec2(modalBtnWidth, 36.0f)))
+		{
+			m_PendingDeleteMilestoneId = 0;
+			m_PendingDeleteMilestoneName.clear();
+			ImGui::CloseCurrentPopup();
+		}
+		ImGui::SetItemDefaultFocus();
+		ImGui::PopStyleColor(3);
+		ImGui::PopStyleVar(2);
+
+		ImGui::SameLine(0, 10.0f);
+
+		ImGui::PushStyleColor(ImGuiCol_Button, redColor);
+		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(255.0f / 255.0f, 76.0f / 255.0f, 76.0f / 255.0f, 1.0f));
+		ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(200.0f / 255.0f, 40.0f / 255.0f, 40.0f / 255.0f, 1.0f));
+		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
+		ImGui::PushStyleColor(ImGuiCol_Text, whiteText);
+		if (ImGui::Button("Delete##DeleteMilestone", ImVec2(modalBtnWidth, 36.0f)))
+		{
+			std::string message;
+			if (TrackingTool::ProjectService::DeleteMilestone(projectId, m_PendingDeleteMilestoneId, message))
+			{
+				TrackingTool::Application::Get().PushNotification(message, NotificationType::Info);
+				EnsureMilestonesLoaded(projectId, true);
+				m_PendingDeleteMilestoneId = 0;
+				m_PendingDeleteMilestoneName.clear();
+				ImGui::CloseCurrentPopup();
+			}
+			else
+			{
+				TrackingTool::Application::Get().PushNotification(message, NotificationType::Error);
+			}
+		}
+		ImGui::PopStyleColor(4);
+		ImGui::PopStyleVar();
+
+		ImGui::EndPopup();
+	}
+
+	ImGui::PopStyleVar(2);
+	ImGui::PopStyleColor(2);
+}
+
 void MilestonesView::OnRender(const char* projectName, const char* createdDate, int projectId, bool isLeader)
 {
 	EnsureMilestonesLoaded(projectId, false);
@@ -260,6 +527,8 @@ void MilestonesView::OnRender(const char* projectName, const char* createdDate, 
 	}
 
 	RenderCreateMilestoneModal(projectId);
+	RenderEditMilestoneModal(projectId);
+	RenderDeleteMilestoneModal(projectId);
 
 	ImGui::Dummy(ImVec2(0.0f, 10.0f));
 
@@ -317,49 +586,103 @@ void MilestonesView::OnRender(const char* projectName, const char* createdDate, 
 
 	for (const TrackingTool::MilestoneInfo& milestone : m_Milestones)
 	{
+		ImGui::PushID(milestone.Id);
+
 		const char* badgeLabel = ToBadgeLabel(milestone.Status);
 		const ImVec4 badgeColor = StatusBadgeColor(milestone.Status, cyanColor, grayText, greenColor);
 		const float badgeWidth = StatusBadgeWidth(badgeLabel);
 
-		// Title row: name left, status badge right-aligned on the same line.
+		// Title row: name left; edit/delete (leader) + status badge right.
 		ImGui::PushStyleColor(ImGuiCol_Text, whiteText);
 		ImGui::TextUnformatted(milestone.Name.c_str());
 		ImGui::PopStyleColor();
 
-		ImGui::SameLine(totalWidth - badgeWidth);
+		const float actionBtnW = 22.0f;
+		const float actionsGap = 6.0f;
+		const float actionsWidth = isLeader ? (actionBtnW * 2.0f + actionsGap + 8.0f) : 0.0f;
+		const float rightClusterWidth = badgeWidth + actionsWidth;
+
+		ImGui::SameLine(totalWidth - rightClusterWidth);
+
+		if (isLeader)
+		{
+			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.0f, 173.0f / 255.0f, 181.0f / 255.0f, 0.18f));
+			ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.0f, 173.0f / 255.0f, 181.0f / 255.0f, 0.3f));
+			ImGui::PushStyleColor(ImGuiCol_Text, grayText);
+			ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4.0f, 2.0f));
+			ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 3.0f);
+
+			if (ImGui::SmallButton(ICON_FA_PEN_TO_SQUARE "##edit"))
+				OpenEditForMilestone(milestone);
+			if (ImGui::IsItemHovered())
+				ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+
+			ImGui::SameLine(0.0f, actionsGap);
+
+			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(238.0f / 255.0f, 56.0f / 255.0f, 56.0f / 255.0f, 0.2f));
+			ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(238.0f / 255.0f, 56.0f / 255.0f, 56.0f / 255.0f, 0.35f));
+			if (ImGui::SmallButton(ICON_FA_TRASH "##delete"))
+			{
+				m_PendingDeleteMilestoneId = milestone.Id;
+				m_PendingDeleteMilestoneName = milestone.Name;
+				m_OpenDeleteModal = true;
+			}
+			if (ImGui::IsItemHovered())
+				ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+			ImGui::PopStyleColor(2);
+
+			ImGui::PopStyleVar(2);
+			ImGui::PopStyleColor(4);
+
+			ImGui::SameLine(0.0f, 8.0f);
+		}
+
 		DrawOutlineBadge(badgeLabel, badgeColor, badgeColor, badgeWidth);
 
 		if (!milestone.StartDate.empty() || !milestone.EndDate.empty())
 		{
 			ImGui::PushStyleColor(ImGuiCol_Text, grayText);
-			ImGui::Text("%s %s  -  %s", ICON_FA_CALENDAR, milestone.StartDate.empty() ? "—" : milestone.StartDate.c_str(), milestone.EndDate.empty() ? "—" : milestone.EndDate.c_str());
+			ImGui::Text("%s %s  -  %s", ICON_FA_CALENDAR,
+				milestone.StartDate.empty() ? "—" : milestone.StartDate.c_str(),
+				milestone.EndDate.empty() ? "—" : milestone.EndDate.c_str());
 			ImGui::PopStyleColor();
 		}
 
 		ImGui::Dummy(ImVec2(0.0f, 5.0f));
 
-		const float progress01 = milestone.ProgressPercentage <= 0.0f ? 0.0f : (milestone.ProgressPercentage >= 100.0f ? 1.0f : milestone.ProgressPercentage / 100.0f);
+		const float progress01 = milestone.ProgressPercentage <= 0.0f ? 0.0f
+			: (milestone.ProgressPercentage >= 100.0f ? 1.0f : milestone.ProgressPercentage / 100.0f);
 
 		ImVec2 pbPos = ImGui::GetCursorScreenPos();
 		const float pbHeight = 4.0f;
-		drawList->AddRectFilled(pbPos, ImVec2(pbPos.x + totalWidth, pbPos.y + pbHeight), ImGui::GetColorU32(ImVec4(40.0f / 255.0f, 43.0f / 255.0f, 43.0f / 255.0f, 1.0f)));
+		drawList->AddRectFilled(pbPos, ImVec2(pbPos.x + totalWidth, pbPos.y + pbHeight),
+			ImGui::GetColorU32(ImVec4(40.0f / 255.0f, 43.0f / 255.0f, 43.0f / 255.0f, 1.0f)));
 		if (progress01 > 0.0f)
 		{
-			drawList->AddRectFilled(pbPos, ImVec2(pbPos.x + totalWidth * progress01, pbPos.y + pbHeight), ImGui::GetColorU32(cyanColor));
+			drawList->AddRectFilled(pbPos, ImVec2(pbPos.x + totalWidth * progress01, pbPos.y + pbHeight),
+				ImGui::GetColorU32(cyanColor));
 		}
 
 		ImGui::Dummy(ImVec2(0.0f, 8.0f));
 
+		char subtasksBuf[48];
+		std::snprintf(subtasksBuf, sizeof(subtasksBuf), "Subtasks: %d/%d",
+			milestone.DoneTasks, milestone.TotalTasks);
+
 		char percentBuf[16];
-		std::snprintf(percentBuf, sizeof(percentBuf), "%.0f%%", static_cast<double>(milestone.ProgressPercentage));
+		std::snprintf(percentBuf, sizeof(percentBuf), "%.0f%%",
+			static_cast<double>(milestone.ProgressPercentage));
 
 		ImGui::PushStyleColor(ImGuiCol_Text, grayText);
-		ImGui::Text("Subtasks: 0/0");
+		ImGui::TextUnformatted(subtasksBuf);
 		const float percentWidth = ImGui::CalcTextSize(percentBuf).x;
 		ImGui::SameLine(totalWidth - percentWidth);
 		ImGui::TextUnformatted(percentBuf);
 		ImGui::PopStyleColor();
 
 		DrawRowSeparator();
+
+		ImGui::PopID();
 	}
 }

@@ -694,31 +694,33 @@ void TasksView::RenderCreateTaskModal(int projectId)
 		ImGui::Text("DESCRIPTION");
 		ImGui::PopStyleColor();
 		ImGui::PushStyleColor(ImGuiCol_Text, whiteText);
-		ImGui::InputTextMultiline("##CreateTaskDescription", m_FormDescription, IM_ARRAYSIZE(m_FormDescription),
-			ImVec2(fieldWidth, 80.0f));
+		ImGui::InputTextMultiline("##CreateTaskDescription", m_FormDescription, IM_ARRAYSIZE(m_FormDescription), ImVec2(fieldWidth, 80.0f));
 		ImGui::PopStyleColor();
 
 		ImGui::Dummy(ImVec2(0.0f, 10.0f));
 
 		const float halfWidth = (fieldWidth - 12.0f) * 0.5f;
+		const float startX = ImGui::GetCursorPosX();
 
-		ImGui::BeginGroup();
+		// -- Row 1: Labels --
 		ImGui::PushStyleColor(ImGuiCol_Text, grayText);
 		ImGui::Text("ESTIMATED HOURS");
-		ImGui::PopStyleColor();
-		ImGui::PushStyleColor(ImGuiCol_Text, whiteText);
-		ImGui::SetNextItemWidth(halfWidth);
-		ImGui::InputTextWithHint("##CreateTaskHours", "e.g. 4", m_FormEstimatedHours, IM_ARRAYSIZE(m_FormEstimatedHours));
-		ImGui::PopStyleColor();
-		ImGui::EndGroup();
-
-		ImGui::SameLine(0.0f, 12.0f);
-
-		ImGui::BeginGroup();
-		ImGui::PushStyleColor(ImGuiCol_Text, grayText);
+		ImGui::SameLine();
+		ImGui::SetCursorPosX(startX + halfWidth + 12.0f);
 		ImGui::Text("PRIORITY");
 		ImGui::PopStyleColor();
+
+		// -- Row 2: Inputs --
 		ImGui::PushStyleColor(ImGuiCol_Text, whiteText);
+
+		// First input
+		ImGui::SetNextItemWidth(halfWidth);
+		ImGui::InputTextWithHint("##CreateTaskHours", "e.g. 4", m_FormEstimatedHours, IM_ARRAYSIZE(m_FormEstimatedHours));
+
+		ImGui::SameLine();
+		ImGui::SetCursorPosX(startX + halfWidth + 12.0f);
+
+		// Second input
 		ImGui::SetNextItemWidth(halfWidth);
 		if (ImGui::BeginCombo("##CreateTaskPriority", kPriorityLabels[m_SelectedPriorityIndex]))
 		{
@@ -733,7 +735,6 @@ void TasksView::RenderCreateTaskModal(int projectId)
 			ImGui::EndCombo();
 		}
 		ImGui::PopStyleColor();
-		ImGui::EndGroup();
 
 		ImGui::Dummy(ImVec2(0.0f, 10.0f));
 
@@ -938,33 +939,35 @@ void TasksView::RenderEditTaskModal(int projectId)
 		ImGui::Text("DESCRIPTION");
 		ImGui::PopStyleColor();
 		ImGui::PushStyleColor(ImGuiCol_Text, whiteText);
-		ImGui::InputTextMultiline("##EditTaskDescription", m_FormDescription, IM_ARRAYSIZE(m_FormDescription),
-			ImVec2(fieldWidth, 80.0f));
+		ImGui::InputTextMultiline("##EditTaskDescription", m_FormDescription, IM_ARRAYSIZE(m_FormDescription), ImVec2(fieldWidth, 80.0f));
 		ImGui::PopStyleColor();
 
 		ImGui::Dummy(ImVec2(0.0f, 10.0f));
 
 		const float halfWidth = (fieldWidth - 12.0f) * 0.5f;
+		const float startX = ImGui::GetCursorPosX();
 
-		ImGui::BeginGroup();
+		// -- Row 1: Labels --
 		ImGui::PushStyleColor(ImGuiCol_Text, grayText);
 		ImGui::Text("ESTIMATED HOURS");
-		ImGui::PopStyleColor();
-		ImGui::PushStyleColor(ImGuiCol_Text, whiteText);
-		ImGui::SetNextItemWidth(halfWidth);
-		ImGui::InputTextWithHint("##EditTaskHours", "e.g. 4", m_FormEstimatedHours, IM_ARRAYSIZE(m_FormEstimatedHours));
-		ImGui::PopStyleColor();
-		ImGui::EndGroup();
-
-		ImGui::SameLine(0.0f, 12.0f);
-
-		ImGui::BeginGroup();
-		ImGui::PushStyleColor(ImGuiCol_Text, grayText);
+		ImGui::SameLine();
+		ImGui::SetCursorPosX(startX + halfWidth + 12.0f);
 		ImGui::Text("PRIORITY");
 		ImGui::PopStyleColor();
+
+		// -- Row 2: Inputs --
 		ImGui::PushStyleColor(ImGuiCol_Text, whiteText);
+
+		// First input
 		ImGui::SetNextItemWidth(halfWidth);
-		if (ImGui::BeginCombo("##EditTaskPriority", kPriorityLabels[m_SelectedPriorityIndex]))
+		ImGui::InputTextWithHint("##CreateTaskHours", "e.g. 4", m_FormEstimatedHours, IM_ARRAYSIZE(m_FormEstimatedHours));
+
+		ImGui::SameLine();
+		ImGui::SetCursorPosX(startX + halfWidth + 12.0f);
+
+		// Second input
+		ImGui::SetNextItemWidth(halfWidth);
+		if (ImGui::BeginCombo("##CreateTaskPriority", kPriorityLabels[m_SelectedPriorityIndex]))
 		{
 			for (int i = 0; i < 4; ++i)
 			{
@@ -977,7 +980,6 @@ void TasksView::RenderEditTaskModal(int projectId)
 			ImGui::EndCombo();
 		}
 		ImGui::PopStyleColor();
-		ImGui::EndGroup();
 
 		ImGui::Dummy(ImVec2(0.0f, 10.0f));
 
@@ -1661,24 +1663,10 @@ void TasksView::OnRender(const char* projectName, const char* createdDate, int p
 	ImGui::Text("%s %s", ICON_FA_CALENDAR, displayDate);
 	ImGui::PopStyleColor();
 
-	float btnWidth = 120.0f;
-	float filterBtnWidth = 90.0f;
-	float btnSpacing = 10.0f;
-
 	if (isLeader)
 	{
-		ImGui::SameLine(totalWidth - btnWidth - filterBtnWidth - btnSpacing);
-
-		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-		ImGui::PushStyleColor(ImGuiCol_Border, borderColor);
-		ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
-		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
-		ImGui::PushStyleColor(ImGuiCol_Text, whiteText);
-		if (ImGui::Button(ICON_FA_FILTER " Filters", ImVec2(filterBtnWidth, 32.0f))) {}
-		ImGui::PopStyleColor(3);
-		ImGui::PopStyleVar(2);
-
-		ImGui::SameLine(0, btnSpacing);
+		const float btnWidth = 120.0f;
+		ImGui::SameLine(totalWidth - btnWidth);
 
 		ImGui::PushStyleColor(ImGuiCol_Button, cyanColor);
 		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.0f, 193.0f / 255.0f, 201.0f / 255.0f, 1.0f));
@@ -1694,18 +1682,6 @@ void TasksView::OnRender(const char* projectName, const char* createdDate, int p
 		}
 		ImGui::PopStyleColor(4);
 		ImGui::PopStyleVar();
-	}
-	else
-	{
-		ImGui::SameLine(totalWidth - filterBtnWidth);
-		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-		ImGui::PushStyleColor(ImGuiCol_Border, borderColor);
-		ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
-		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
-		ImGui::PushStyleColor(ImGuiCol_Text, whiteText);
-		if (ImGui::Button(ICON_FA_FILTER " Filters", ImVec2(filterBtnWidth, 32.0f))) {}
-		ImGui::PopStyleColor(3);
-		ImGui::PopStyleVar(2);
 	}
 
 	RenderCreateTaskModal(projectId);

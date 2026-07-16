@@ -4,6 +4,14 @@
 #include "Authentication/AuthenticationLayer.h"
 #include "NotificationLayer.h"
 
+#include <iostream>
+
+void* operator new(size_t size)
+{
+	std::cout << "Allocating " << size << " bytes\n";
+	return malloc(size);
+}
+
 int main()
 {
 	// Init database
