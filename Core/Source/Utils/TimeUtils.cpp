@@ -58,6 +58,35 @@ namespace TrackingTool
                 return year * 10000 + month * 100 + day;
             }
 
+            // Civil day number (days since 1970-01-01) via Howard Hinnant's algorithm.
+            // Avoids mktime / DST so day math stays calendar-accurate.
+            int ToCivilDayNumber(int year, int month, int day)
+            {
+                year -= month <= 2;
+                const int era = (year >= 0 ? year : year - 399) / 400;
+                const unsigned yoe = static_cast<unsigned>(year - era * 400);
+                const unsigned doy = (153 * (month + (month > 2 ? -3 : 9)) + 2) / 5
+                    + static_cast<unsigned>(day) - 1;
+                const unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+                return era * 146097 + static_cast<int>(doe) - 719468;
+            }
+
+            void FromCivilDayNumber(int z, int& outYear, int& outMonth, int& outDay)
+            {
+                z += 719468;
+                const int era = (z >= 0 ? z : z - 146096) / 146097;
+                const unsigned doe = static_cast<unsigned>(z - era * 146097);
+                const unsigned yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+                const int y = static_cast<int>(yoe) + era * 400;
+                const unsigned doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+                const unsigned mp = (5 * doy + 2) / 153;
+                const unsigned d = doy - (153 * mp + 2) / 5 + 1;
+                const unsigned m = mp < 10 ? mp + 3 : mp - 9;
+                outYear = y + (m <= 2);
+                outMonth = static_cast<int>(m);
+                outDay = static_cast<int>(d);
+            }
+
             // Fills outTm with local wall-clock time. Returns false on failure.
             bool GetLocalTm(std::tm& outTm)
             {
@@ -183,6 +212,82 @@ namespace TrackingTool
         int CompareMmDdYyyy(const std::string& a, const std::string& b)
         {
             return CompareMmDdYyyy(a.c_str(), b.c_str());
+        }
+
+        int DaysBetweenMmDdYyyy(const char* a, const char* b)
+        {
+            int am = 0, ad = 0, ay = 0;
+            int bm = 0, bd = 0, by = 0;
+            if (!ParseMmDdYyyy(a, am, ad, ay) || !ParseMmDdYyyy(b, bm, bd, by))
+                return 0;
+            return ToCivilDayNumber(by, bm, bd) - ToCivilDayNumber(ay, am, ad);
+        }
+
+        int DaysBetweenMmDdYyyy(const std::string& a, const std::string& b)
+        {
+            return DaysBetweenMmDdYyyy(a.c_str(), b.c_str());
+        }
+
+        bool AddDaysMmDdYyyy(const char* dateMmDdYyyy, int deltaDays, char* outBuf, size_t outBufSize)
+        {
+            if (!outBuf || outBufSize < 11)
+                return false;
+
+            int month = 0, day = 0, year = 0;
+            if (!ParseMmDdYyyy(dateMmDdYyyy, month, day, year))
+            {
+                outBuf[0] = '\0';
+                return false;
+            }
+
+            const int z = ToCivilDayNumber(year, month, day) + deltaDays;
+            FromCivilDayNumber(z, year, month, day);
+
+            const int written = std::snprintf(outBuf, outBufSize, "%02d-%02d-%04d", month, day, year);
+            return written == 10;
+        }
+
+        bool AddDaysMmDdYyyy(const std::string& dateMmDdYyyy, int deltaDays, char* outBuf, size_t outBufSize)
+        {
+            return AddDaysMmDdYyyy(dateMmDdYyyy.c_str(), deltaDays, outBuf, outBufSize);
+        }
+
+        bool FormatDayHeaderMmDdYyyy(const char* dateMmDdYyyy, char* outBuf, size_t outBufSize)
+        {
+            // "WED\n16 JUL" = 3 + 1 + 2 + 1 + 3 = 10 chars + NUL → need 11; use 12 for safety.
+            if (!outBuf || outBufSize < 12)
+                return false;
+
+            int month = 0, day = 0, year = 0;
+            if (!ParseMmDdYyyy(dateMmDdYyyy, month, day, year))
+            {
+                outBuf[0] = '\0';
+                return false;
+            }
+
+            // Sakamoto weekday: 0 = Sunday ... 6 = Saturday
+            static constexpr int kT[] = { 0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4 };
+            int y = year;
+            if (month < 3)
+                --y;
+            const int w = (y + y / 4 - y / 100 + y / 400 + kT[month - 1] + day) % 7;
+
+            static constexpr const char* kDays[] = {
+                "SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"
+            };
+            static constexpr const char* kMonths[] = {
+                "JAN", "FEB", "MAR", "APR", "MAY", "JUN",
+                "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"
+            };
+
+            const int written = std::snprintf(outBuf, outBufSize, "%s\n%02d %s",
+                kDays[w], day, kMonths[month - 1]);
+            return written > 0 && static_cast<size_t>(written) < outBufSize;
+        }
+
+        bool FormatDayHeaderMmDdYyyy(const std::string& dateMmDdYyyy, char* outBuf, size_t outBufSize)
+        {
+            return FormatDayHeaderMmDdYyyy(dateMmDdYyyy.c_str(), outBuf, outBufSize);
         }
 
         std::string ComputeMilestoneStatus(float progressPercentage,

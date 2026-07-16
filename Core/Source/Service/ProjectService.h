@@ -102,7 +102,12 @@ namespace TrackingTool
 		static int GetMilestonesCacheGeneration();
 
 		// Drops cached tasks (all projects, or a single projectId if > 0).
+		// Bumps GetTasksCacheGeneration() so views can skip per-frame reloads.
 		static void InvalidateTasksCache(int projectId = 0);
+
+		// Monotonic stamp; increments whenever the tasks cache is dropped.
+		// Views compare against a local copy to reload only when data may have changed.
+		static int GetTasksCacheGeneration();
 
 		// Session-selected project (e.g. opened from the dashboard grid).
 		static void SetActiveProject(const ProjectInfo& project);
@@ -128,6 +133,7 @@ namespace TrackingTool
 		static std::vector<TaskInfo> s_CachedTasks;
 		static int s_CachedTasksProjectId;
 		static bool s_HasTasksCache;
+		static int s_TasksCacheGeneration;
 	};
 
 }

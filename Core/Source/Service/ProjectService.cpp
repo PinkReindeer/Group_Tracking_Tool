@@ -37,6 +37,7 @@ namespace TrackingTool
 	int ProjectService::s_CachedMilestonesProjectId = 0;
 	bool ProjectService::s_HasMilestonesCache = false;
 	int ProjectService::s_MilestonesCacheGeneration = 0;
+	int ProjectService::s_TasksCacheGeneration = 0;
 
 	std::vector<TaskInfo> ProjectService::s_CachedTasks;
 	int ProjectService::s_CachedTasksProjectId = 0;
@@ -86,6 +87,12 @@ namespace TrackingTool
 		s_CachedTasks.clear();
 		s_CachedTasksProjectId = 0;
 		s_HasTasksCache = false;
+		++s_TasksCacheGeneration;
+	}
+
+	int ProjectService::GetTasksCacheGeneration()
+	{
+		return s_TasksCacheGeneration;
 	}
 
 	void ProjectService::SetActiveProject(const ProjectInfo& project)

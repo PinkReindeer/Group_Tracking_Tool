@@ -32,6 +32,21 @@ namespace TrackingTool
         int CompareMmDdYyyy(const std::string& a, const std::string& b);
         int CompareMmDdYyyy(const char* a, const char* b);
 
+        // Whole calendar days from a to b (b - a). Positive when b is after a.
+        // Returns 0 if either date is invalid.
+        int DaysBetweenMmDdYyyy(const char* a, const char* b);
+        int DaysBetweenMmDdYyyy(const std::string& a, const std::string& b);
+
+        // Writes date + deltaDays as MM-DD-YYYY into outBuf (needs at least 11 bytes incl. NUL).
+        // Returns false if date is invalid, outBuf is null, or outBufSize < 11.
+        bool AddDaysMmDdYyyy(const char* dateMmDdYyyy, int deltaDays, char* outBuf, size_t outBufSize);
+        bool AddDaysMmDdYyyy(const std::string& dateMmDdYyyy, int deltaDays, char* outBuf, size_t outBufSize);
+
+        // Formats a valid MM-DD-YYYY as a two-line day header, e.g. "MON\n12 OCT".
+        // outBuf needs at least 12 bytes. Returns false if date is invalid or buffer too small.
+        bool FormatDayHeaderMmDdYyyy(const char* dateMmDdYyyy, char* outBuf, size_t outBufSize);
+        bool FormatDayHeaderMmDdYyyy(const std::string& dateMmDdYyyy, char* outBuf, size_t outBufSize);
+
         // Milestone status from progress and date window:
         // - completed: progress >= 100
         // - not started: today before start date
