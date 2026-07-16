@@ -32,6 +32,9 @@ private:
 	TrackingTool::ProjectInfo m_Project;
 	bool m_HasProject = false;
 
+	// ImGui time until which the invite-code copy control shows "Copied!" feedback.
+	double m_CopyFeedbackUntil = 0.0;
+
 	TasksView m_TasksView;
 	MilestonesView m_MilestonesView;
 	ChartView m_ChartView;
