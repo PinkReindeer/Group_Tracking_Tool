@@ -22,6 +22,8 @@ private:
 	void RenderSideNavBar();
 	void RenderTopNavBar();
 	void RenderLogoutConfirmModal();
+	void RenderNotificationBell(float bellX, float centerY);
+	void RenderNotificationPopup();
 
 	// Set when the user chooses Logout from the gear menu; opens the confirm modal next frame.
 	bool m_OpenLogoutConfirm = false;

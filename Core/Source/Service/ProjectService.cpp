@@ -6,6 +6,7 @@
 #include "Utils/ProjectUtils.h"
 #include "Utils/TimeUtils.h"
 
+#include <algorithm>
 #include <cctype>
 
 namespace TrackingTool
@@ -26,6 +27,30 @@ namespace TrackingTool
 			}
 			return code;
 		}
+
+		// Case-insensitive ASCII compare against a literal — no heap allocation.
+		bool EqualsIgnoreCase(const std::string& value, const char* literal)
+		{
+			size_t i = 0;
+			for (; i < value.size() && literal[i] != '\0'; ++i)
+			{
+				const unsigned char a = static_cast<unsigned char>(value[i]);
+				const unsigned char b = static_cast<unsigned char>(literal[i]);
+				if (std::tolower(a) != std::tolower(b))
+					return false;
+			}
+			return i == value.size() && literal[i] == '\0';
+		}
+
+		// Overdue when deadline is before today and the task is not already done.
+		bool IsTaskOverdue(const TaskInfo& task, const char* todayMmDdYyyy)
+		{
+			if (task.Deadline.empty() || EqualsIgnoreCase(task.Status, "done"))
+				return false;
+			if (!todayMmDdYyyy || !Utils::IsValidMmDdYyyy(task.Deadline.c_str()))
+				return false;
+			return Utils::CompareMmDdYyyy(task.Deadline.c_str(), todayMmDdYyyy) < 0;
+		}
 	}
 
 	std::vector<ProjectInfo> ProjectService::s_CachedProjects;
@@ -43,6 +68,17 @@ namespace TrackingTool
 	int ProjectService::s_CachedTasksProjectId = 0;
 	bool ProjectService::s_HasTasksCache = false;
 
+	std::vector<MemberInfo> ProjectService::s_CachedMembers;
+	int ProjectService::s_CachedMembersProjectId = 0;
+	bool ProjectService::s_HasMembersCache = false;
+	int ProjectService::s_MembersCacheGeneration = 0;
+
+	std::vector<ProjectService::TaskNotificationInfo> ProjectService::s_TaskNotifications;
+	int ProjectService::s_PendingNotificationCount = 0;
+	int ProjectService::s_OverdueNotificationCount = 0;
+	bool ProjectService::s_HasTaskNotifications = false;
+	bool ProjectService::s_RebuildingTaskNotifications = false;
+
 	namespace
 	{
 		std::string TrimCopy(const std::string& raw)
@@ -57,10 +93,202 @@ namespace TrackingTool
 		}
 	}
 
+	void ProjectService::ClearTaskNotifications()
+	{
+		s_TaskNotifications.clear();
+		s_PendingNotificationCount = 0;
+		s_OverdueNotificationCount = 0;
+		s_HasTaskNotifications = false;
+	}
+
+	namespace
+	{
+		void AppendTaskNotificationsForProject(
+			const ProjectInfo& project,
+			const std::vector<TaskInfo>& tasks,
+			const std::string& userName,
+			const char* today,
+			std::vector<ProjectService::TaskNotificationInfo>& outItems)
+		{
+			for (const TaskInfo& task : tasks)
+			{
+				if (!EqualsIgnoreCase(task.AssignedMemberName, userName.c_str()))
+					continue;
+
+				const bool overdue = IsTaskOverdue(task, today);
+				const bool pending = EqualsIgnoreCase(task.Status, "pending");
+
+				// Overdue takes priority so a late pending task appears once under Overdue.
+				if (overdue)
+				{
+					ProjectService::TaskNotificationInfo item;
+					item.TaskId = task.Id;
+					item.ProjectId = project.Id;
+					item.ProjectName = project.Name;
+					item.TaskName = task.Name;
+					item.Deadline = task.Deadline;
+					item.IsOverdue = true;
+					outItems.push_back(std::move(item));
+				}
+				else if (pending)
+				{
+					ProjectService::TaskNotificationInfo item;
+					item.TaskId = task.Id;
+					item.ProjectId = project.Id;
+					item.ProjectName = project.Name;
+					item.TaskName = task.Name;
+					item.Deadline = task.Deadline;
+					item.IsOverdue = false;
+					outItems.push_back(std::move(item));
+				}
+			}
+		}
+
+		void SortAndCountTaskNotifications(
+			std::vector<ProjectService::TaskNotificationInfo>& items,
+			int& outPending,
+			int& outOverdue)
+		{
+			std::stable_sort(items.begin(), items.end(),
+				[](const ProjectService::TaskNotificationInfo& a,
+					const ProjectService::TaskNotificationInfo& b)
+				{
+					if (a.IsOverdue != b.IsOverdue)
+						return a.IsOverdue && !b.IsOverdue;
+					if (a.ProjectName != b.ProjectName)
+						return a.ProjectName < b.ProjectName;
+					return a.TaskName < b.TaskName;
+				});
+
+			outPending = 0;
+			outOverdue = 0;
+			for (const ProjectService::TaskNotificationInfo& item : items)
+			{
+				if (item.IsOverdue)
+					++outOverdue;
+				else
+					++outPending;
+			}
+		}
+	}
+
+	void ProjectService::RefreshTaskNotifications(bool forceRefresh, int onlyProjectId)
+	{
+		if (s_RebuildingTaskNotifications)
+			return;
+
+		if (!AuthService::IsLoggedIn())
+		{
+			ClearTaskNotifications();
+			return;
+		}
+
+		// Incremental: single project mutation while an inbox already exists.
+		// Full rebuild: login, membership change, explicit refresh, or no inbox yet.
+		const bool singleProject = (onlyProjectId > 0 && s_HasTaskNotifications);
+
+		s_RebuildingTaskNotifications = true;
+
+		std::string message;
+		std::vector<ProjectInfo> projects;
+		// Project list rarely changes on task create — prefer cache for single-project path.
+		if (!GetUserProjects(projects, message, forceRefresh && !singleProject))
+		{
+			s_RebuildingTaskNotifications = false;
+			return;
+		}
+
+		const std::string& userName = AuthService::GetLoggedInUser();
+		const char* today = Utils::GetTodayMmDdYyyy();
+
+		if (singleProject)
+		{
+			// Drop rows for this project, reload only its tasks from DB.
+			s_TaskNotifications.erase(
+				std::remove_if(s_TaskNotifications.begin(), s_TaskNotifications.end(),
+					[onlyProjectId](const TaskNotificationInfo& item)
+					{
+						return item.ProjectId == onlyProjectId;
+					}),
+				s_TaskNotifications.end());
+
+			const ProjectInfo* project = nullptr;
+			for (const ProjectInfo& p : projects)
+			{
+				if (p.Id == onlyProjectId)
+				{
+					project = &p;
+					break;
+				}
+			}
+
+			if (project)
+			{
+				std::vector<TaskInfo> tasks;
+				// Always force this project's tasks after a mutation so the inbox matches the DB.
+				if (GetProjectTasks(project->Id, tasks, message, true))
+					AppendTaskNotificationsForProject(*project, tasks, userName, today, s_TaskNotifications);
+			}
+
+			SortAndCountTaskNotifications(s_TaskNotifications, s_PendingNotificationCount, s_OverdueNotificationCount);
+			s_HasTaskNotifications = true;
+			s_RebuildingTaskNotifications = false;
+
+			Log::Info("ProjectService::RefreshTaskNotifications: incremental project {} → {} pending, {} overdue.",
+				onlyProjectId, s_PendingNotificationCount, s_OverdueNotificationCount);
+			return;
+		}
+
+		// Full rebuild (login, membership change, explicit refresh).
+		ClearTaskNotifications();
+
+		for (const ProjectInfo& project : projects)
+		{
+			std::vector<TaskInfo> tasks;
+			if (!GetProjectTasks(project.Id, tasks, message, forceRefresh))
+				continue;
+			AppendTaskNotificationsForProject(project, tasks, userName, today, s_TaskNotifications);
+		}
+
+		SortAndCountTaskNotifications(s_TaskNotifications, s_PendingNotificationCount, s_OverdueNotificationCount);
+		s_HasTaskNotifications = true;
+		s_RebuildingTaskNotifications = false;
+
+		Log::Info("ProjectService::RefreshTaskNotifications: full → {} pending, {} overdue for '{}'.",
+			s_PendingNotificationCount, s_OverdueNotificationCount, userName);
+	}
+
+	const std::vector<ProjectService::TaskNotificationInfo>& ProjectService::GetTaskNotifications()
+	{
+		return s_TaskNotifications;
+	}
+
+	int ProjectService::GetPendingNotificationCount()
+	{
+		return s_PendingNotificationCount;
+	}
+
+	int ProjectService::GetOverdueNotificationCount()
+	{
+		return s_OverdueNotificationCount;
+	}
+
+	bool ProjectService::HasTaskNotifications()
+	{
+		return s_HasTaskNotifications;
+	}
+
 	void ProjectService::InvalidateProjectsCache()
 	{
 		s_CachedProjects.clear();
 		s_HasCache = false;
+		// Membership roster may have changed with projects.
+		InvalidateMembersCache();
+		// Membership list changed — drop inbox, then rebuild if still logged in
+		// (join/create/delete project). Login clears the user first so this is a no-op there.
+		ClearTaskNotifications();
+		if (!s_RebuildingTaskNotifications && AuthService::IsLoggedIn())
+			RefreshTaskNotifications(true, 0);
 	}
 
 	void ProjectService::InvalidateMilestonesCache(int projectId)
@@ -79,15 +307,39 @@ namespace TrackingTool
 		return s_MilestonesCacheGeneration;
 	}
 
-	void ProjectService::InvalidateTasksCache(int projectId)
+	void ProjectService::InvalidateMembersCache(int projectId)
 	{
-		if (projectId > 0 && s_HasTasksCache && s_CachedTasksProjectId != projectId)
+		if (projectId > 0 && s_HasMembersCache && s_CachedMembersProjectId != projectId)
 			return;
 
-		s_CachedTasks.clear();
-		s_CachedTasksProjectId = 0;
-		s_HasTasksCache = false;
+		s_CachedMembers.clear();
+		s_CachedMembersProjectId = 0;
+		s_HasMembersCache = false;
+		++s_MembersCacheGeneration;
+	}
+
+	int ProjectService::GetMembersCacheGeneration()
+	{
+		return s_MembersCacheGeneration;
+	}
+
+	void ProjectService::InvalidateTasksCache(int projectId)
+	{
+		// Always bump generation so views (TasksView) reload even if the single-slot
+		// task cache currently holds a different project.
 		++s_TasksCacheGeneration;
+
+		if (!(projectId > 0 && s_HasTasksCache && s_CachedTasksProjectId != projectId))
+		{
+			s_CachedTasks.clear();
+			s_CachedTasksProjectId = 0;
+			s_HasTasksCache = false;
+		}
+
+		// Rebuild inbox: one project only when possible (create/edit/accept/submit/review).
+		// Skip while already rebuilding, and while logged out (login/logout cache wipes).
+		if (!s_RebuildingTaskNotifications && AuthService::IsLoggedIn())
+			RefreshTaskNotifications(false, projectId);
 	}
 
 	int ProjectService::GetTasksCacheGeneration()
@@ -1213,6 +1465,45 @@ namespace TrackingTool
 		s_CachedTasksProjectId = projectId;
 		s_HasTasksCache = true;
 		outMessage = "Tasks loaded.";
+		return true;
+	}
+
+	bool ProjectService::GetProjectMembers(int projectId, std::vector<MemberInfo>& outMembers,
+		std::string& outMessage, bool forceRefresh)
+	{
+		outMembers.clear();
+		outMessage.clear();
+
+		if (projectId <= 0)
+		{
+			outMessage = "Invalid project.";
+			return false;
+		}
+
+		if (!AuthService::IsLoggedIn())
+		{
+			outMessage = "You must be logged in to view members.";
+			Log::Error("ProjectService::GetProjectMembers: no user is currently logged in.");
+			return false;
+		}
+
+		if (s_HasMembersCache && !forceRefresh && s_CachedMembersProjectId == projectId)
+		{
+			outMembers = s_CachedMembers;
+			outMessage = "Members loaded from cache.";
+			return true;
+		}
+
+		if (!Database::GetProjectMembers(projectId, outMembers))
+		{
+			outMessage = "Failed to load project members from the database.";
+			return false;
+		}
+
+		s_CachedMembers = outMembers;
+		s_CachedMembersProjectId = projectId;
+		s_HasMembersCache = true;
+		outMessage = "Members loaded.";
 		return true;
 	}
 

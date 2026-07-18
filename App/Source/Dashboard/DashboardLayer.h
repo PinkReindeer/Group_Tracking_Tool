@@ -26,10 +26,18 @@ private:
 	// showNotification: toast success/error (used by Live Refresh).
 	void RefreshProjects(bool forceRefresh = false, bool showNotification = false);
 
+	// Counts the logged-in user's tasks across m_Projects (pending / in progress / overdue).
+	// Call after m_Projects is up to date. forceRefresh bypasses the tasks session cache.
+	void RefreshTaskStats(bool forceRefresh = false);
+
 	void RenderEditProjectModal();
 	void RenderDeleteProjectModal();
 
 	std::vector<TrackingTool::ProjectInfo> m_Projects;
+	int m_PendingTaskCount = 0;
+	int m_InProgressTaskCount = 0;
+	int m_OverdueTaskCount = 0;
+
 	bool m_ShowCreateProjectModal = false;
 	char m_NewProjectName[128] = "";
 	char m_NewProjectDescription[512] = "";

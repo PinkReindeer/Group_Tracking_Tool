@@ -71,11 +71,22 @@ namespace TrackingTool
 		{
 			if (BCrypt::validatePassword(password, hashedPassword))
 			{
-				// Drop any previous session's project list / selection before switching users.
+				// Drop any previous session before switching users (clear user first so
+				// cache invalidation does not rebuild the inbox under the old account).
+				s_LoggedInUser.clear();
 				ProjectService::InvalidateProjectsCache();
 				ProjectService::InvalidateMilestonesCache();
+				ProjectService::InvalidateTasksCache();
 				ProjectService::ClearActiveProject();
+				ProjectService::ClearTaskNotifications();
+
 				s_LoggedInUser = userName;
+
+				// Prefetch projects + pending/overdue task inbox for the top-nav bell.
+				// Done here so the dashboard loads with badge counts already available
+				// (no DB hit when the user opens the notification dropdown).
+				ProjectService::RefreshTaskNotifications(true);
+
 				outMessage = "Login successful.";
 				return true;
 			}
@@ -94,10 +105,13 @@ namespace TrackingTool
 
 	void AuthService::Logout()
 	{
+		// Clear identity first so task-cache invalidation does not rebuild the inbox.
+		s_LoggedInUser.clear();
 		ProjectService::InvalidateProjectsCache();
 		ProjectService::InvalidateMilestonesCache();
+		ProjectService::InvalidateTasksCache();
 		ProjectService::ClearActiveProject();
-		s_LoggedInUser.clear();
+		ProjectService::ClearTaskNotifications();
 	}
 
 	const std::string& AuthService::GetLoggedInUser()

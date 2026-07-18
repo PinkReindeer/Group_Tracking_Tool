@@ -5,7 +5,9 @@
 
 #include "Platform/Application.h"
 #include "Project/ProjectLayer.h"
+#include "Service/AuthService.h"
 #include "Service/ProjectService.h"
+#include "Utils/TimeUtils.h"
 
 #include <cctype>
 #include <cstdio>
@@ -25,6 +27,30 @@ namespace
 				return false;
 		}
 		return true;
+	}
+
+	// Case-insensitive ASCII compare against a literal — no heap allocation.
+	bool EqualsIgnoreCase(const std::string& value, const char* literal)
+	{
+		size_t i = 0;
+		for (; i < value.size() && literal[i] != '\0'; ++i)
+		{
+			const unsigned char a = static_cast<unsigned char>(value[i]);
+			const unsigned char b = static_cast<unsigned char>(literal[i]);
+			if (std::tolower(a) != std::tolower(b))
+				return false;
+		}
+		return i == value.size() && literal[i] == '\0';
+	}
+
+	// Overdue when deadline is before today and the task is not already done.
+	bool IsTaskOverdue(const TrackingTool::TaskInfo& task, const char* todayMmDdYyyy)
+	{
+		if (task.Deadline.empty() || EqualsIgnoreCase(task.Status, "done"))
+			return false;
+		if (!todayMmDdYyyy || !TrackingTool::Utils::IsValidMmDdYyyy(task.Deadline.c_str()))
+			return false;
+		return TrackingTool::Utils::CompareMmDdYyyy(task.Deadline.c_str(), todayMmDdYyyy) < 0;
 	}
 }
 
@@ -46,6 +72,7 @@ void DashboardLayer::RefreshProjects(bool forceRefresh, bool showNotification)
 	if (TrackingTool::ProjectService::GetUserProjects(projects, message, forceRefresh))
 	{
 		m_Projects = std::move(projects);
+		RefreshTaskStats(forceRefresh);
 		if (showNotification)
 		{
 			const std::string info = "Projects refreshed (" + std::to_string(m_Projects.size()) + ").";
@@ -55,6 +82,42 @@ void DashboardLayer::RefreshProjects(bool forceRefresh, bool showNotification)
 	else if (showNotification)
 	{
 		TrackingTool::Application::Get().PushNotification(message, NotificationType::Error);
+	}
+}
+
+void DashboardLayer::RefreshTaskStats(bool forceRefresh)
+{
+	m_PendingTaskCount = 0;
+	m_InProgressTaskCount = 0;
+	m_OverdueTaskCount = 0;
+
+	if (!TrackingTool::AuthService::IsLoggedIn() || m_Projects.empty())
+		return;
+
+	const std::string& userName = TrackingTool::AuthService::GetLoggedInUser();
+	const char* today = TrackingTool::Utils::GetTodayMmDdYyyy();
+
+	for (const TrackingTool::ProjectInfo& project : m_Projects)
+	{
+		std::vector<TrackingTool::TaskInfo> tasks;
+		std::string message;
+		if (!TrackingTool::ProjectService::GetProjectTasks(project.Id, tasks, message, forceRefresh))
+			continue;
+
+		for (const TrackingTool::TaskInfo& task : tasks)
+		{
+			// Personal dashboard: only count tasks assigned to the logged-in user.
+			if (!EqualsIgnoreCase(task.AssignedMemberName, userName.c_str()))
+				continue;
+
+			if (EqualsIgnoreCase(task.Status, "pending"))
+				++m_PendingTaskCount;
+			else if (EqualsIgnoreCase(task.Status, "in progress"))
+				++m_InProgressTaskCount;
+
+			if (IsTaskOverdue(task, today))
+				++m_OverdueTaskCount;
+		}
 	}
 }
 
@@ -101,11 +164,17 @@ void DashboardLayer::OnRenderContent()
 	};
 
 	char projectCountStr[16];
+	char pendingCountStr[16];
+	char inProgressCountStr[16];
+	char overdueCountStr[16];
 	std::snprintf(projectCountStr, sizeof(projectCountStr), "%zu", m_Projects.size());
+	std::snprintf(pendingCountStr, sizeof(pendingCountStr), "%d", m_PendingTaskCount);
+	std::snprintf(inProgressCountStr, sizeof(inProgressCountStr), "%d", m_InProgressTaskCount);
+	std::snprintf(overdueCountStr, sizeof(overdueCountStr), "%d", m_OverdueTaskCount);
 	DrawStatBox(0, "PROJECT", projectCountStr, cyanColor, cyanColor, cyanColor);
-	DrawStatBox(1, "PENDING TASKS", "0", grayText, whiteText, ImVec4(80.0f/255.0f, 80.0f/255.0f, 80.0f/255.0f, 1.0f));
-	DrawStatBox(2, "IN PROGRESS", "0", blueColor, blueColor, blueColor);
-	DrawStatBox(3, "OVERDUE", "0", redColor, redColor, redColor);
+	DrawStatBox(1, "PENDING TASKS", pendingCountStr, grayText, whiteText, ImVec4(80.0f/255.0f, 80.0f/255.0f, 80.0f/255.0f, 1.0f));
+	DrawStatBox(2, "IN PROGRESS", inProgressCountStr, blueColor, blueColor, blueColor);
+	DrawStatBox(3, "OVERDUE", overdueCountStr, redColor, redColor, redColor);
 
 	ImGui::SetCursorPosY(ImGui::GetCursorPosY() + boxHeight + 30.0f);
 

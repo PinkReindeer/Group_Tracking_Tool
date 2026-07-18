@@ -502,10 +502,13 @@ void TasksView::EnsureTasksLoaded(int projectId, bool forceRefresh)
 		m_Tasks.clear();
 		m_LoadedProjectId = 0;
 		m_HasLoaded = false;
+		m_TasksCacheGeneration = -1;
 		return;
 	}
 
-	if (!forceRefresh && m_HasLoaded && m_LoadedProjectId == projectId)
+	const int serviceGen = TrackingTool::ProjectService::GetTasksCacheGeneration();
+	// Reuse local list when project matches and service cache was not invalidated.
+	if (!forceRefresh && m_HasLoaded && m_LoadedProjectId == projectId && m_TasksCacheGeneration == serviceGen)
 		return;
 
 	// Drop collapse state when switching projects so we don't leak ids.
@@ -514,11 +517,14 @@ void TasksView::EnsureTasksLoaded(int projectId, bool forceRefresh)
 
 	std::string message;
 	std::vector<TrackingTool::TaskInfo> tasks;
+	// Prefer session cache after mutations: InvalidateTasksCache + notif refresh often
+	// already pulled this project's tasks into ProjectService.
 	if (TrackingTool::ProjectService::GetProjectTasks(projectId, tasks, message, forceRefresh))
 	{
 		m_Tasks = std::move(tasks);
 		m_LoadedProjectId = projectId;
 		m_HasLoaded = true;
+		m_TasksCacheGeneration = TrackingTool::ProjectService::GetTasksCacheGeneration();
 	}
 	else
 	{
@@ -527,6 +533,7 @@ void TasksView::EnsureTasksLoaded(int projectId, bool forceRefresh)
 			m_Tasks.clear();
 			m_LoadedProjectId = projectId;
 			m_HasLoaded = false;
+			m_TasksCacheGeneration = -1;
 		}
 		TrackingTool::Application::Get().PushNotification(message, NotificationType::Error);
 	}
@@ -540,11 +547,19 @@ void TasksView::EnsureFormLookupsLoaded(int projectId)
 		m_FormMembers.clear();
 		m_FormLookupsProjectId = 0;
 		m_HasFormLookups = false;
+		m_FormMilestonesGeneration = -1;
+		m_FormMembersGeneration = -1;
 		return;
 	}
 
-	if (m_HasFormLookups && m_FormLookupsProjectId == projectId)
+	const int milestonesGen = TrackingTool::ProjectService::GetMilestonesCacheGeneration();
+	const int membersGen = TrackingTool::ProjectService::GetMembersCacheGeneration();
+	if (m_HasFormLookups && m_FormLookupsProjectId == projectId
+		&& m_FormMilestonesGeneration == milestonesGen
+		&& m_FormMembersGeneration == membersGen)
+	{
 		return;
+	}
 
 	std::string message;
 	std::vector<TrackingTool::MilestoneInfo> milestones;
@@ -554,16 +569,19 @@ void TasksView::EnsureFormLookupsLoaded(int projectId)
 	}
 
 	std::vector<TrackingTool::MemberInfo> members;
-	if (!TrackingTool::Database::GetProjectMembers(projectId, members))
+	if (!TrackingTool::ProjectService::GetProjectMembers(projectId, members, message, false))
 	{
 		TrackingTool::Application::Get().PushNotification(
-			"Failed to load project members for task assignment.", NotificationType::Error);
+			message.empty() ? "Failed to load project members for task assignment." : message,
+			NotificationType::Error);
 	}
 
 	m_FormMilestones = std::move(milestones);
 	m_FormMembers = std::move(members);
 	m_FormLookupsProjectId = projectId;
 	m_HasFormLookups = true;
+	m_FormMilestonesGeneration = TrackingTool::ProjectService::GetMilestonesCacheGeneration();
+	m_FormMembersGeneration = TrackingTool::ProjectService::GetMembersCacheGeneration();
 
 	if (m_SelectedMilestoneIndex < 0 || m_SelectedMilestoneIndex >= static_cast<int>(m_FormMilestones.size()))
 		m_SelectedMilestoneIndex = m_FormMilestones.empty() ? -1 : 0;
@@ -590,9 +608,9 @@ void TasksView::RenderCreateTaskModal(int projectId)
 	if (ImGui::BeginPopupModal("Create Task", nullptr,
 		ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar))
 	{
+		// Lookups are prefetched when the Tasks tab is shown — do not hit the DB on open.
 		if (ImGui::IsWindowAppearing())
 		{
-			m_HasFormLookups = false;
 			EnsureFormLookupsLoaded(projectId);
 			if (m_SelectedMilestoneIndex < 0 && !m_FormMilestones.empty())
 				m_SelectedMilestoneIndex = 0;
@@ -796,7 +814,8 @@ void TasksView::RenderCreateTaskModal(int projectId)
 						kPriorities[m_SelectedPriorityIndex], m_FormDeadline, dependsOn, message))
 					{
 						TrackingTool::Application::Get().PushNotification(message, NotificationType::Info);
-						EnsureTasksLoaded(projectId, true);
+						// Generation stamp changes on create; reload from session cache (no extra force DB).
+						EnsureTasksLoaded(projectId, false);
 						ResetCreateForm();
 						ImGui::CloseCurrentPopup();
 					}
@@ -1638,6 +1657,9 @@ void TasksView::RenderReviewTaskModal(int projectId)
 void TasksView::OnRender(const char* projectName, const char* createdDate, int projectId, bool isLeader)
 {
 	EnsureTasksLoaded(projectId, false);
+	// Prefetch milestone/member combos while idle so "New Task" opens without a DB wait.
+	if (isLeader && projectId > 0)
+		EnsureFormLookupsLoaded(projectId);
 
 	ImDrawList* drawList = ImGui::GetWindowDrawList();
 	float totalWidth = ImGui::GetContentRegionAvail().x;
@@ -1675,8 +1697,7 @@ void TasksView::OnRender(const char* projectName, const char* createdDate, int p
 		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(18.0f / 255.0f, 20.0f / 255.0f, 20.0f / 255.0f, 1.0f));
 		if (ImGui::Button(ICON_FA_PLUS " New Task", ImVec2(btnWidth, 32.0f)))
 		{
-			m_HasFormLookups = false;
-			EnsureFormLookupsLoaded(projectId);
+			// Form data already cached via EnsureFormLookupsLoaded above.
 			ResetCreateForm();
 			ImGui::OpenPopup("Create Task");
 		}
@@ -1951,7 +1972,6 @@ void TasksView::OnRender(const char* projectName, const char* createdDate, int p
 
 			if (ImGui::SmallButton(ICON_FA_PEN_TO_SQUARE "##edit"))
 			{
-				m_HasFormLookups = false;
 				EnsureFormLookupsLoaded(projectId);
 				FillFormFromTask(task);
 				m_OpenEditModal = true;

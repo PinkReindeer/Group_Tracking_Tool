@@ -85,12 +85,16 @@ namespace TrackingTool
 		// Loads tasks for a project. Uses a per-project session cache unless forceRefresh.
 		static bool GetProjectTasks(int projectId, std::vector<TaskInfo>& outTasks, std::string& outMessage, bool forceRefresh = false);
 
+		// Loads members for a project. Uses a per-project session cache unless forceRefresh.
+		static bool GetProjectMembers(int projectId, std::vector<MemberInfo>& outMembers, std::string& outMessage, bool forceRefresh = false);
+
 		// Removes a member from a project. Only the project leader may do this,
 		// and the leader cannot remove themselves.
 		static bool RemoveMember(int projectId, const std::string& memberName, std::string& outMessage);
 
 		// Drops the in-memory projects list. Call on logout or after mutations that
 		// are not followed by an immediate force-refresh.
+		// Also clears the top-nav task notification inbox (membership changed).
 		static void InvalidateProjectsCache();
 
 		// Drops cached milestones (all projects, or a single projectId if > 0).
@@ -103,11 +107,44 @@ namespace TrackingTool
 
 		// Drops cached tasks (all projects, or a single projectId if > 0).
 		// Bumps GetTasksCacheGeneration() so views can skip per-frame reloads.
+		// When the user is logged in, also rebuilds the top-nav notification inbox
+		// (incrementally for a single projectId when possible).
 		static void InvalidateTasksCache(int projectId = 0);
 
 		// Monotonic stamp; increments whenever the tasks cache is dropped.
 		// Views compare against a local copy to reload only when data may have changed.
 		static int GetTasksCacheGeneration();
+
+		// Drops cached members (all projects, or a single projectId if > 0).
+		static void InvalidateMembersCache(int projectId = 0);
+		static int GetMembersCacheGeneration();
+
+		// One row in the top-nav task inbox (pending assignment and/or overdue deadline).
+		struct TaskNotificationInfo
+		{
+			int TaskId = 0;
+			int ProjectId = 0;
+			std::string ProjectName;
+			std::string TaskName;
+			std::string Deadline; // MM-DD-YYYY when present
+			// true = past deadline (not done); false = pending assignment awaiting accept.
+			bool IsOverdue = false;
+		};
+
+		// Loads projects + assigned pending/overdue tasks into the session notification inbox.
+		// Call after a successful login (and optionally from the inbox Refresh control).
+		// forceRefresh hits the DB; otherwise reuses ProjectService caches when possible.
+		// onlyProjectId > 0: refresh that project's rows only (fast path after task mutations).
+		static void RefreshTaskNotifications(bool forceRefresh = true, int onlyProjectId = 0);
+
+		// Clears the notification inbox without loading (logout / pre-login cache wipe).
+		static void ClearTaskNotifications();
+
+		// Zero-copy access to the session-cached inbox. Empty until RefreshTaskNotifications.
+		static const std::vector<TaskNotificationInfo>& GetTaskNotifications();
+		static int GetPendingNotificationCount();
+		static int GetOverdueNotificationCount();
+		static bool HasTaskNotifications();
 
 		// Session-selected project (e.g. opened from the dashboard grid).
 		static void SetActiveProject(const ProjectInfo& project);
@@ -134,6 +171,19 @@ namespace TrackingTool
 		static int s_CachedTasksProjectId;
 		static bool s_HasTasksCache;
 		static int s_TasksCacheGeneration;
+
+		static std::vector<MemberInfo> s_CachedMembers;
+		static int s_CachedMembersProjectId;
+		static bool s_HasMembersCache;
+		static int s_MembersCacheGeneration;
+
+		// Top-nav inbox: built at login and after task/project mutations.
+		static std::vector<TaskNotificationInfo> s_TaskNotifications;
+		static int s_PendingNotificationCount;
+		static int s_OverdueNotificationCount;
+		static bool s_HasTaskNotifications;
+		// Prevents re-entrant rebuild when RefreshTaskNotifications loads tasks.
+		static bool s_RebuildingTaskNotifications;
 	};
 
 }

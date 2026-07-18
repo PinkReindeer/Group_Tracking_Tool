@@ -40,12 +40,17 @@ private:
 	std::vector<TrackingTool::TaskInfo> m_Tasks;
 	int m_LoadedProjectId = 0;
 	bool m_HasLoaded = false;
+	// Matches ProjectService::GetTasksCacheGeneration() after the last successful load.
+	int m_TasksCacheGeneration = -1;
 
 	// Lookups for create/edit forms (milestones + members of this project).
 	std::vector<TrackingTool::MilestoneInfo> m_FormMilestones;
 	std::vector<TrackingTool::MemberInfo> m_FormMembers;
 	int m_FormLookupsProjectId = 0;
 	bool m_HasFormLookups = false;
+	// Match service generations so create/edit reuses cached rosters without a DB hit.
+	int m_FormMilestonesGeneration = -1;
+	int m_FormMembersGeneration = -1;
 
 	// Shared form buffers (create + edit).
 	char m_FormTaskName[128] = "";
