@@ -1,10 +1,14 @@
 #include "AuthService.h"
 
+#include "Service/ProjectService.h"
+
 #include <bcrypt/BCrypt.hpp>
 #include <cstring>
 
 namespace TrackingTool
 {
+
+	std::string AuthService::s_LoggedInUser = "";
 
 	bool AuthService::Register(const std::string& userName, const std::string& password, const std::string& confirmPassword, std::string& outMessage)
 	{
@@ -67,6 +71,22 @@ namespace TrackingTool
 		{
 			if (BCrypt::validatePassword(password, hashedPassword))
 			{
+				// Drop any previous session before switching users (clear user first so
+				// cache invalidation does not rebuild the inbox under the old account).
+				s_LoggedInUser.clear();
+				ProjectService::InvalidateProjectsCache();
+				ProjectService::InvalidateMilestonesCache();
+				ProjectService::InvalidateTasksCache();
+				ProjectService::ClearActiveProject();
+				ProjectService::ClearTaskNotifications();
+
+				s_LoggedInUser = userName;
+
+				// Prefetch projects + pending/overdue task inbox for the top-nav bell.
+				// Done here so the dashboard loads with badge counts already available
+				// (no DB hit when the user opens the notification dropdown).
+				ProjectService::RefreshTaskNotifications(true);
+
 				outMessage = "Login successful.";
 				return true;
 			}
@@ -78,9 +98,30 @@ namespace TrackingTool
 		}
 		catch (const std::exception& e)
 		{
-			outMessage = "Invalid password format in database.";
+			outMessage = std::string("Invalid password format in database.") + e.what();
 			return false;
 		}
+	}
+
+	void AuthService::Logout()
+	{
+		// Clear identity first so task-cache invalidation does not rebuild the inbox.
+		s_LoggedInUser.clear();
+		ProjectService::InvalidateProjectsCache();
+		ProjectService::InvalidateMilestonesCache();
+		ProjectService::InvalidateTasksCache();
+		ProjectService::ClearActiveProject();
+		ProjectService::ClearTaskNotifications();
+	}
+
+	const std::string& AuthService::GetLoggedInUser()
+	{
+		return s_LoggedInUser;
+	}
+
+	bool AuthService::IsLoggedIn()
+	{
+		return !s_LoggedInUser.empty();
 	}
 
 }

@@ -4,7 +4,13 @@ A desktop application for group tracking, built with C++20, OpenGL, and Dear ImG
 
 ## Screenshots
 
-<!-- Add app screenshot later -->
+![Login](App/Assets/GitImage/Login.jpg)
+![Dashboard](App/Assets/GitImage/Dashboard.jpg)
+![Task](App/Assets/GitImage/Task.jpg)
+![Milestone](App/Assets/GitImage/Milestone.jpg)
+![Chart](App/Assets/GitImage/Chart.jpg)
+![Workload](App/Assets/GitImage/Workload.jpg)
+![Member](App/Assets/GitImage/Member.jpg)
 
 ---
 
@@ -126,6 +132,29 @@ All dependencies except PostgreSQL and OpenGL are fetched automatically via CMak
 
 ---
 
+## Environment Setup
+
+The app loads its database connection string from a `.env` file at runtime (searched upward from the working directory).
+
+1. Copy the example env file and rename it to `.env`:
+   ```bash
+   # Windows (PowerShell)
+   Copy-Item .env.example .env
+
+   # Linux / macOS
+   cp .env.example .env
+   ```
+2. Edit `.env` and set the `DATABASE_URI` key (this value is also documented as a placeholder in `.env.example`):
+   ```env
+   DATABASE_URI=<database-uri>
+   ```
+3. **Ask the project owner for the project URI** (the real PostgreSQL / Supabase connection string). Do not invent or commit a real URI. Replace `<database-uri>` in your local `.env` only.
+
+> [IMPORTANT]
+> Never commit `.env` with real credentials. Keep secrets in your local `.env` only; `.env.example` should stay as a placeholder template.
+
+---
+
 ## Running
 
 After a successful build, run the executable:
@@ -149,5 +178,6 @@ After a successful build, run the executable:
 |---------|----------|
 | `Could NOT find PostgreSQL` | Set `-DPostgreSQL_ROOT` to your PostgreSQL install path |
 | `libpq.dll not found` at runtime (Windows) | Add `C:\Program Files\PostgreSQL\18\bin` to your `PATH` |
+| `.env file not found` / `DATABASE_URI key not found` | Copy `.env.example` to `.env`, set `DATABASE_URI`, and **ask the project owner for the project URI** |
 | Font warnings on startup | Ensure the working directory contains `Assets/Fonts/` |
 | OpenGL errors | Update your GPU drivers; the app requires OpenGL 4.1+ |

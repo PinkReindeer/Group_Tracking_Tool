@@ -4,16 +4,30 @@
 
 set(SOURCES
 	Source/Main.cpp
-	Source/VoidLayer.cpp
-	Source/VoidLayer.h
-	Source/LoginLayer.h
-	Source/LoginLayer.cpp
-	Source/RegisterLayer.h
-	Source/RegisterLayer.cpp
+	Source/Authentication/AuthenticationLayer.h
+	Source/Authentication/AuthenticationLayer.cpp
+	Source/Authentication/Views/LoginView.h
+	Source/Authentication/Views/LoginView.cpp
+	Source/Authentication/Views/RegisterView.h
+	Source/Authentication/Views/RegisterView.cpp
 	Source/NotificationLayer.h
 	Source/NotificationLayer.cpp
-	Source/DashboardLayer.h
-	Source/DashboardLayer.cpp
+	Source/Dashboard/DashboardLayer.h
+	Source/Dashboard/DashboardLayer.cpp
+	Source/AppLayoutLayer.h
+	Source/AppLayoutLayer.cpp
+	Source/Project/ProjectLayer.h
+	Source/Project/ProjectLayer.cpp
+	Source/Project/Views/TasksView.h
+	Source/Project/Views/TasksView.cpp
+	Source/Project/Views/MilestonesView.h
+	Source/Project/Views/MilestonesView.cpp
+	Source/Project/Views/ChartView.h
+	Source/Project/Views/ChartView.cpp
+	Source/Project/Views/WorkloadView.h
+	Source/Project/Views/WorkloadView.cpp
+	Source/Project/Views/MemberView.h
+	Source/Project/Views/MemberView.cpp
 )
 
 add_executable(App)

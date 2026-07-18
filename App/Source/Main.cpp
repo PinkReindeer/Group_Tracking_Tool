@@ -1,7 +1,7 @@
-#include "Platform/Application.h"
+﻿#include "Platform/Application.h"
 #include "Database/Database.h"
 
-#include "RegisterLayer.h"
+#include "Authentication/AuthenticationLayer.h"
 #include "NotificationLayer.h"
 
 int main()
@@ -14,7 +14,7 @@ int main()
 	appSpec.WindowSpec.Width = 1280;
 
 	TrackingTool::Application app(appSpec);
-	app.PushLayer<RegisterLayer>();
+	app.PushLayer<AuthenticationLayer>();
 	app.PushLayer<NotificationLayer>();
 	app.Run();
 }
