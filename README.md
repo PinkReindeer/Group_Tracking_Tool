@@ -4,7 +4,13 @@ A desktop application for group tracking, built with C++20, OpenGL, and Dear ImG
 
 ## Screenshots
 
-<!-- Add app screenshot later -->
+![Login](App/Assets/GitImage/Login.jpg)
+![Dashboard](App/Assets/GitImage/Dashboard.jpg)
+![Task](App/Assets/GitImage/Task.jpg)
+![Milestone](App/Assets/GitImage/Milestone.jpg)
+![Chart](App/Assets/GitImage/Chart.jpg)
+![Workload](App/Assets/GitImage/Workload.jpg)
+![Member](App/Assets/GitImage/Member.jpg)
 
 ---
 
